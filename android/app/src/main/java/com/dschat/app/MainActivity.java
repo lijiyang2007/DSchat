@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.webkit.JavascriptInterface;
+import org.json.JSONArray;
 import android.webkit.WebView;
 import android.webkit.WebSettings;
 import androidx.core.content.FileProvider;
@@ -25,6 +26,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -82,7 +84,7 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
-        public void downloadAndInstallApk(String apkUrl, String fileName) {
+        public void downloadAndInstallApk(String apkUrl, String fileName, String mirrorsJson) {
             if ("downloading".equals(updateStatus)) {
                 return;
             }
@@ -103,76 +105,103 @@ public class MainActivity extends BridgeActivity {
                 : "DSchat-update.apk";
 
             Thread downloadThread = new Thread(() -> {
-                HttpURLConnection conn = null;
-                try {
-                    File updateDir = new File(getCacheDir(), "updates");
-                    if (!updateDir.exists()) {
-                        updateDir.mkdirs();
-                    }
-                    File tempFile = new File(updateDir, safeName + ".part");
-                    File finalFile = new File(updateDir, safeName);
+                File updateDir = new File(getCacheDir(), "updates");
+                if (!updateDir.exists()) {
+                    updateDir.mkdirs();
+                }
+                File tempFile = new File(updateDir, safeName + ".part");
+                File finalFile = new File(updateDir, safeName);
 
-                    URL currentUrl = new URL(apkUrl);
-                    int redirects = 0;
-                    while (true) {
-                        conn = (HttpURLConnection) currentUrl.openConnection();
-                        conn.setInstanceFollowRedirects(false);
-                        conn.setConnectTimeout(15000);
-                        conn.setReadTimeout(60000);
-                        conn.setRequestProperty("User-Agent", "DSchat-Android");
-                        int code = conn.getResponseCode();
-                        if (code >= 300 && code < 400 && redirects < 8) {
-                            String loc = conn.getHeaderField("Location");
-                            conn.disconnect();
-                            if (loc == null || loc.isEmpty()) {
-                                throw new IOException("Redirect without location");
-                            }
-                            currentUrl = new URL(currentUrl, loc);
-                            redirects++;
-                            continue;
-                        }
-                        if (code < 200 || code >= 300) {
-                            throw new IOException("HTTP " + code);
-                        }
-                        break;
-                    }
-
-                    long total = conn.getContentLengthLong();
-                    updateTotal = Math.max(0, total);
-                    try (
-                        InputStream in = new BufferedInputStream(conn.getInputStream());
-                        FileOutputStream fileOut = new FileOutputStream(tempFile)
-                    ) {
-                        byte[] buf = new byte[16384];
-                        long downloaded = 0;
-                        int n;
-                        while ((n = in.read(buf)) != -1) {
-                            fileOut.write(buf, 0, n);
-                            downloaded += n;
-                            updateDownloaded = downloaded;
-                            if (total > 0) {
-                                updateProgress = (int) Math.min(100, (downloaded * 100L) / total);
+                // 直连失败时依次换镜像：国内网络直连 release-assets 常被阻断
+                List<String> candidates = new ArrayList<>();
+                candidates.add(apkUrl);
+                if (mirrorsJson != null && !mirrorsJson.isEmpty()) {
+                    try {
+                        JSONArray array = new JSONArray(mirrorsJson);
+                        for (int i = 0; i < array.length(); i++) {
+                            String mirror = array.optString(i, "");
+                            if (!mirror.isEmpty()) {
+                                candidates.add(mirror);
                             }
                         }
-                        fileOut.flush();
-                    }
-                    if (finalFile.exists()) {
-                        finalFile.delete();
-                    }
-                    if (!tempFile.renameTo(finalFile)) {
-                        throw new IOException("Failed to prepare APK file");
-                    }
-                    downloadedApkFile = finalFile;
-                    updateProgress = 100;
-                    runOnUiThread(() -> triggerApkInstall(finalFile));
-                } catch (Exception e) {
-                    updateStatus = "error";
-                    updateError = e.getMessage() != null ? e.getMessage() : "Download failed";
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
+                    } catch (Exception ignored) {
                     }
                 }
+
+                String lastError = "";
+                for (String candidate : candidates) {
+                    HttpURLConnection conn = null;
+                    try {
+                        URL currentUrl = new URL(candidate);
+                        int redirects = 0;
+                        while (true) {
+                            conn = (HttpURLConnection) currentUrl.openConnection();
+                            conn.setInstanceFollowRedirects(false);
+                            conn.setConnectTimeout(15000);
+                            conn.setReadTimeout(60000);
+                            conn.setRequestProperty("User-Agent", "DSchat-Android");
+                            int code = conn.getResponseCode();
+                            if (code >= 300 && code < 400 && redirects < 8) {
+                                String loc = conn.getHeaderField("Location");
+                                conn.disconnect();
+                                if (loc == null || loc.isEmpty()) {
+                                    throw new IOException("Redirect without location");
+                                }
+                                currentUrl = new URL(currentUrl, loc);
+                                redirects++;
+                                continue;
+                            }
+                            if (code < 200 || code >= 300) {
+                                throw new IOException("HTTP " + code);
+                            }
+                            break;
+                        }
+
+                        long total = conn.getContentLengthLong();
+                        updateTotal = Math.max(0, total);
+                        try (
+                            InputStream in = new BufferedInputStream(conn.getInputStream());
+                            FileOutputStream fileOut = new FileOutputStream(tempFile)
+                        ) {
+                            byte[] buf = new byte[16384];
+                            long downloaded = 0;
+                            int n;
+                            while ((n = in.read(buf)) != -1) {
+                                fileOut.write(buf, 0, n);
+                                downloaded += n;
+                                updateDownloaded = downloaded;
+                                if (total > 0) {
+                                    updateProgress = (int) Math.min(100, (downloaded * 100L) / total);
+                                }
+                            }
+                            fileOut.flush();
+                        }
+                        if (finalFile.exists()) {
+                            finalFile.delete();
+                        }
+                        if (!tempFile.renameTo(finalFile)) {
+                            throw new IOException("Failed to prepare APK file");
+                        }
+                        downloadedApkFile = finalFile;
+                        updateProgress = 100;
+                        updateStatus = "downloading";
+                        runOnUiThread(() -> triggerApkInstall(finalFile));
+                        return;
+                    } catch (Exception e) {
+                        lastError = e.getMessage() != null ? e.getMessage() : "Download failed";
+                        updateDownloaded = 0;
+                        updateProgress = 0;
+                        if (tempFile.exists()) {
+                            tempFile.delete();
+                        }
+                    } finally {
+                        if (conn != null) {
+                            conn.disconnect();
+                        }
+                    }
+                }
+                updateStatus = "error";
+                updateError = lastError.isEmpty() ? "Download failed" : lastError;
             }, "DSchatApkDownloader");
             downloadThread.setDaemon(true);
             downloadThread.start();

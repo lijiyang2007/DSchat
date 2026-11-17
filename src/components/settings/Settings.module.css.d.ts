@@ -34,6 +34,13 @@ declare const styles: {
   readonly paramLabel: string
   readonly switch: string
   readonly switchThumb: string
+  readonly fontSizeCell: string
+  readonly fontSizePreview: string
+  readonly fontSizeHint: string
+  readonly fontSizeSlider: string
+  readonly fontSizeMarks: string
+  readonly fontSizeMark: string
+  readonly fontSizeMarkActive: string
   readonly resetRow: string
   readonly memoryAddRow: string
   readonly memoryAddInput: string

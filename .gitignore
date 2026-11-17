@@ -14,3 +14,5 @@ tmp/
 *.apk
 .idea/
 android/local.properties
+
+.tmp-check/

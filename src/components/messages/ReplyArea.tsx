@@ -28,6 +28,7 @@ import {
   type Source,
   type Step,
 } from '../../services/chat/view.js'
+import { useSettings } from '../../services/settings.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { Markdown } from '../markdown/Markdown.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
@@ -65,8 +66,17 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
+  const autoCollapseThinking = useSettings((state) => state.autoCollapseThinking)
   const [open, setOpen] = useState(true)
+  // 思考刚结束时，如果开了「自动折叠」就收起；用户自己点过的以用户为准
+  const [touched, setTouched] = useState(false)
   const titleActive = streaming && !hasResponse
+  const finished = !streaming || hasResponse
+  useEffect(() => {
+    if (autoCollapseThinking && finished && !touched) {
+      setOpen(false)
+    }
+  }, [autoCollapseThinking, finished, touched])
   useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
@@ -78,7 +88,13 @@ export const ReplyArea = memo(function ReplyArea({
   return (
     <div className={styles.area}>
       {title ? (
-        <div className={styles.title} onClick={() => setOpen((value) => !value)}>
+        <div
+          className={styles.title}
+          onClick={() => {
+            setTouched(true)
+            setOpen((value) => !value)
+          }}
+        >
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>
             <IconThinkOutline16 />
           </span>

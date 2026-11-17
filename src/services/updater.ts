@@ -6,6 +6,38 @@ export const GITHUB_REPO = 'lijiyang2007/DSchat'
 export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`
 export const GITHUB_RELEASES_URL = `${GITHUB_REPO_URL}/releases`
 const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+
+/**
+ * GitHub 加速镜像。国内网络直连 api.github.com 常被阻断，
+ * 这里按顺序尝试：直连 → 各镜像，任何一个通了就能检查更新 / 下载安装包。
+ */
+export const UPDATE_MIRRORS = [
+  'https://gh-proxy.com/',
+  'https://ghfast.top/',
+  'https://ghproxy.net/',
+]
+
+/** 把 GitHub 地址展开成「直连 + 各镜像」的候选列表 */
+export const withMirrors = (url: string): string[] => [
+  url,
+  ...UPDATE_MIRRORS.map((prefix) => `${prefix}${url}`),
+]
+
+/** 依次尝试候选地址，返回第一个成功的结果 */
+const fetchFirstAvailable = async <T>(
+  urls: string[],
+  run: (url: string) => Promise<T>
+): Promise<T> => {
+  let lastError: unknown = null
+  for (const url of urls) {
+    try {
+      return await run(url)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError ?? new Error('All update endpoints failed')
+}
 const SKIPPED_VERSION_KEY = 'chat-demo:skipped-update-version'
 
 export type ReleaseInfo = {
@@ -39,7 +71,7 @@ export type DownloadState = {
 
 type AndroidUpdaterBridge = {
   getAppInfo?: () => string
-  downloadAndInstallApk?: (apkUrl: string, fileName: string) => void
+  downloadAndInstallApk?: (apkUrl: string, fileName: string, mirrorsJson?: string) => void
   getUpdateDownloadState?: () => string
   retryInstallDownloadedApk?: () => void
 }
@@ -248,14 +280,29 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
     return
   }
   useUpdater.setState({ checking: true, error: null })
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 12000)
 
   try {
-    const response = await fetchWithDevProxy(LATEST_RELEASE_API, {
-      headers: { Accept: 'application/vnd.github+json' },
-      signal: controller.signal,
-    })
+    // 每个候选地址单独限时：镜像被墙时能尽快换下一个，而不是整体超时
+    const response = await fetchFirstAvailable(
+      withMirrors(LATEST_RELEASE_API),
+      async (url) => {
+        const controller = new AbortController()
+        const timeout = window.setTimeout(() => controller.abort(), 8000)
+        try {
+          const attempt = await fetchWithDevProxy(url, {
+            headers: { Accept: 'application/vnd.github+json' },
+            signal: controller.signal,
+          })
+          // 404 也直接返回：镜像对不存在的仓库同样返回 404，交给下面统一处理
+          if (!attempt.ok && attempt.status !== 404) {
+            throw new Error(`HTTP ${attempt.status}`)
+          }
+          return attempt
+        } finally {
+          window.clearTimeout(timeout)
+        }
+      }
+    )
 
     if (response.status === 404) {
       useUpdater.setState({
@@ -302,8 +349,6 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
     if (manual) {
       showToast({ type: 'error', key: 'updateCheckFailedToast', params: { message } })
     }
-  } finally {
-    window.clearTimeout(timeout)
   }
 }
 
@@ -328,7 +373,11 @@ export const clearSkippedReleaseVersion = () => writeSkippedVersion('')
 
 export const openReleaseInBrowser = (url?: string | null) => {
   const target = url || useUpdater.getState().latest?.htmlUrl || GITHUB_RELEASES_URL
-  window.open(target, '_blank', 'noopener,noreferrer')
+  // 直连打不开时，浏览器里也换到镜像地址
+  const candidate = /^https:\/\/github\.com\//i.test(target)
+    ? `${UPDATE_MIRRORS[0]}${target}`
+    : target
+  window.open(candidate, '_blank', 'noopener,noreferrer')
 }
 
 export const startUpdateInstall = () => {
@@ -340,7 +389,11 @@ export const startUpdateInstall = () => {
   const bridge = getAndroidBridge()
   if (current.isAndroid && latest.apkUrl && bridge?.downloadAndInstallApk) {
     writeSkippedVersion('')
-    bridge.downloadAndInstallApk(latest.apkUrl, latest.apkName ?? `DSchat-v${latest.version}.apk`)
+    bridge.downloadAndInstallApk(
+      latest.apkUrl,
+      latest.apkName ?? `DSchat-v${latest.version}.apk`,
+      JSON.stringify(withMirrors(latest.apkUrl).slice(1))
+    )
     syncAndroidDownloadState()
     stopPollingDownload()
     pollTimer = window.setInterval(syncAndroidDownloadState, 250)

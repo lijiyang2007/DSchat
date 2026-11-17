@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { useSettings, type ThemePreference } from '../services/settings.js'
+import { applyFontScale, useSettings, type ThemePreference } from '../services/settings.js'
 
 export type Theme = 'light' | 'dark'
 
@@ -63,6 +63,9 @@ const syncTheme = () => {
 /** 首屏渲染前同步应用一次，之后随主题设置与系统深浅色变化更新 */
 export const setupTheme = () => {
   syncTheme()
+  // 字号缩放：启动时先套用已保存的档位，之后随设置变化同步
+  applyFontScale(useSettings.getState().fontScale)
+  useSettings.subscribe((state) => applyFontScale(state.fontScale))
   if (document.readyState !== 'complete') {
     window.addEventListener('load', syncPageBackground, { once: true })
   }

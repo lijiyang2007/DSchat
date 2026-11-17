@@ -771,3 +771,58 @@
   color: var(--dsw-alias-brand-primary);
   background-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
 }
+
+/* 字体大小设置：预览 + 滑块 + 三档标记 */
+.fontSizeCell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+}
+
+.fontSizePreview {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.fontSizeHint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fontSizeSlider {
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  margin: 2px 0;
+  accent-color: var(--dsw-alias-brand-primary);
+  background: none;
+  cursor: pointer;
+}
+
+.fontSizeMarks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fontSizeMark {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 100px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.fontSizeMarkActive {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}

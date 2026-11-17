@@ -405,6 +405,15 @@ export const IconRightUpOutline14 = () => (
 )
 
 /** 置顶图钉 */
+export const IconSortOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.5 4.25H9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M1.5 11.75H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="12" cy="4.25" r="1.85" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="9" cy="11.75" r="1.85" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+)
+
 export const IconPinOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

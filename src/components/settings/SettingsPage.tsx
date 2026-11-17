@@ -23,7 +23,7 @@ export const SettingsPage = ({
 }: {
   title: ReactNode
   subtitle?: ReactNode
-  /** 子页返回上一级；主页面不传 */
+  /** 子页返回上一级；主页不传 */
   onBack?: () => void
   onClose: () => void
   children: ReactNode
@@ -85,27 +85,58 @@ export const SettingsPage = ({
   )
 }
 
-/** 主页面上的垂直入口行：标题 + 说明 + 右箭头 */
+/**
+ * 分组卡片：一组相关入口放进同一张圆角卡片，组间留白分隔。
+ * 与系统设置一致，卡片内每行之间用极细分割线。
+ */
+export const SettingsGroup = ({
+  label,
+  children,
+}: {
+  label?: string
+  children: ReactNode
+}) => (
+  <section className={styles.group}>
+    {label ? <div className={styles.groupLabel}>{label}</div> : null}
+    <div className={styles.groupCard}>{children}</div>
+  </section>
+)
+
+/**
+ * 设置行：左侧图标 + 标题（+ 可选说明），右侧当前值 + 右箭头。
+ * 这是新版设置页唯一的行样式，所有入口都复用它，保证排布一致。
+ */
 export const SettingsEntry = ({
   icon,
   title,
   description,
+  value,
   badge,
+  danger,
   onClick,
 }: {
   icon?: ReactNode
   title: string
   description?: string
+  /** 右侧展示的当前值，例如「深色」「简体中文」 */
+  value?: ReactNode
   badge?: ReactNode
+  danger?: boolean
   onClick: () => void
 }) => (
-  <button type="button" className={styles.entry} onClick={onClick}>
+  <button
+    type="button"
+    className={styles.entry}
+    data-danger={danger ? 'true' : undefined}
+    onClick={onClick}
+  >
     {icon ? <span className={styles.entryIcon}>{icon}</span> : null}
     <span className={styles.entryText}>
       <span className={styles.entryTitle}>{title}</span>
       {description ? <span className={styles.entryDesc}>{description}</span> : null}
     </span>
     {badge ? <span className={styles.entryBadge}>{badge}</span> : null}
+    {value !== undefined ? <span className={styles.entryValue}>{value}</span> : null}
     <span className={styles.entryArrow}>
       <IconChevronRightOutline14 />
     </span>

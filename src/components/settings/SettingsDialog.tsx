@@ -1,15 +1,20 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  IconCheckOutline16,
   IconDarkOutline16,
   IconDataOutline16,
   IconDownloadOutline16,
   IconEditOutline16,
   IconFollowsystemOutline16,
   IconLightOutline16,
+  IconLinkOutline16,
+  IconRefreshOutline16,
+  IconSearchOutline16,
   IconSettingsOutline16,
   IconThinkOutline16,
   IconUploadOutline14,
+  IconVolumeOnOutline20,
 } from '../base/icons.js'
 import {
   BackupError,
@@ -21,8 +26,12 @@ import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
+  FONT_SCALES,
   isChineseBrowser,
   setAutoCheckUpdate,
+  setAutoCollapseThinking,
+  setFontScale,
+  setShowTokenUsage,
   setDailyTokenLimit,
   setLocale,
   setLocation,
@@ -63,7 +72,7 @@ import {
   useSettingsDialog,
   type SettingsSection,
 } from './settingsDialogState.js'
-import { SettingsEntry, SettingsPage } from './SettingsPage.js'
+import { SettingsEntry, SettingsGroup, SettingsPage } from './SettingsPage.js'
 import styles from './Settings.module.css'
 
 /**
@@ -107,6 +116,210 @@ const sections: {
   },
 ]
 
+/**
+ * 设置首页：按「账户 / 应用 / 关于」分组的入口列表。
+ * 每行右侧展示当前值（语言、外观、版本号等），点进去是详细设置。
+ */
+const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void }) => {
+  const t = useTranslate()
+  const locale = useSettings((state) => state.locale)
+  const themePreference = useSettings((state) => state.themePreference)
+  const ttsVoice = useSettings((state) => state.ttsVoice)
+  const versionInfo = getCurrentAppVersion()
+  const latest = useUpdater((state) => state.latest)
+  const hasUpdate = useUpdater((state) => state.hasUpdate)
+
+  const themeLabel = t(
+    themePreference === 'light'
+      ? 'avatarMenuSettingsDialogThemeSelectLightOption'
+      : themePreference === 'dark'
+        ? 'avatarMenuSettingsDialogThemeSelectDarkOption'
+        : 'avatarMenuSettingsDialogThemeSelectSystemOption'
+  )
+  const localeLabel = t(locale === 'en-US' ? 'settingsLocaleEnUS' : 'settingsLocaleZhCN')
+  const voiceLabel = t(ttsVoice === 'tide' ? 'settingsTtsVoiceTide' : 'settingsTtsVoiceStella')
+
+  return (
+    <>
+      <SettingsGroup label={t('settingsGroupAccountLabel')}>
+        <SettingsEntry
+          icon={<IconDataOutline16 />}
+          title={t('settingDialogAsideModelOptionLabel')}
+          value={t('settingsHomeApiKeyValue')}
+          onClick={() => open('model')}
+        />
+        <SettingsEntry
+          icon={<IconEditOutline16 />}
+          title={t('settingDialogAsideMemoryOptionLabel')}
+          value={t('settingsHomeMemoryValue')}
+          onClick={() => open('memory')}
+        />
+        <SettingsEntry
+          icon={<IconDownloadOutline16 />}
+          title={t('settingDialogAsideDataOptionLabel')}
+          value={t('settingsHomeDataValue')}
+          onClick={() => open('data')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup label={t('settingsGroupAppLabel')}>
+        <SettingsEntry
+          icon={<IconLightOutline16 />}
+          title={t('settingsAppearanceLabel')}
+          value={themeLabel}
+          onClick={() => open('appearance')}
+        />
+        <SettingsEntry
+          icon={<IconFollowsystemOutline16 />}
+          title={t('settingsLocalePreference')}
+          value={localeLabel}
+          onClick={() => open('general')}
+        />
+        <SettingsEntry
+          icon={<IconVolumeOnOutline20 />}
+          title={t('settingsTtsVoice')}
+          value={voiceLabel}
+          onClick={() => open('general')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup label={t('settingsGroupAboutLabel')}>
+        <SettingsEntry
+          icon={<IconRefreshOutline16 />}
+          title={t('updateSectionLabel')}
+          value={
+            hasUpdate && latest
+              ? t('settingsHomeUpdateAvailable', { version: latest.version })
+              : `v${versionInfo.versionName}`
+          }
+          onClick={() => open('general')}
+        />
+        <SettingsEntry
+          icon={<IconLinkOutline16 />}
+          title={t('settingsHomeAgreementLabel')}
+          onClick={() => open('general')}
+        />
+        <SettingsEntry
+          icon={<IconSearchOutline16 />}
+          title={t('settingsHomeHelpLabel')}
+          onClick={() => open('general')}
+        />
+      </SettingsGroup>
+    </>
+  )
+}
+
+/** 字号四档的显示文案，与 FONT_SCALES 一一对应 */
+const FONT_SIZE_LABELS = [
+  'settingsFontSizeSmall',
+  'settingsFontSizeStandard',
+  'settingsFontSizeLarge',
+  'settingsFontSizeHuge',
+] as const
+
+/**
+ * 外观子页：主题三选一 + 字体大小滑块（实时预览）+ 个性化开关。
+ * 字体大小直接改根元素的 --ds-font-scale，改完立刻生效。
+ */
+const AppearanceSettings = () => {
+  const t = useTranslate()
+  const themePreference = useSettings((state) => state.themePreference)
+  const fontScale = useSettings((state) => state.fontScale)
+  const autoCollapseThinking = useSettings((state) => state.autoCollapseThinking)
+  const showTokenUsage = useSettings((state) => state.showTokenUsage)
+
+  return (
+    <>
+      <SettingsGroup label={t('settingsAppearanceThemeLabel')}>
+        {themeOptions.map((option) => (
+          <SettingsEntry
+            key={option.value}
+            icon={option.icon}
+            title={t(option.label)}
+            badge={
+              themePreference === option.value ? <IconCheckOutline16 /> : undefined
+            }
+            onClick={() => setThemePreference(option.value)}
+          />
+        ))}
+      </SettingsGroup>
+
+      <SettingsGroup label={t('settingsFontSizeLabel')}>
+        <div className={styles.fontSizeCell}>
+          <div className={styles.fontSizePreview}>{t('settingsFontSizePreview')}</div>
+          <div className={styles.fontSizeHint}>{t('settingsFontSizeHint')}</div>
+          <input
+            className={styles.fontSizeSlider}
+            type="range"
+            min={0}
+            max={FONT_SCALES.length - 1}
+            step={1}
+            value={Math.max(0, FONT_SCALES.indexOf(fontScale as (typeof FONT_SCALES)[number]))}
+            aria-label={t('settingsFontSizeLabel')}
+            onChange={(event) =>
+              setFontScale(FONT_SCALES[Number(event.target.value)] ?? 1)
+            }
+          />
+          <div className={styles.fontSizeMarks}>
+            {FONT_SCALES.map((scale, index) => (
+              <button
+                key={scale}
+                type="button"
+                className={clsx(
+                  styles.fontSizeMark,
+                  fontScale === scale && styles.fontSizeMarkActive
+                )}
+                onClick={() => setFontScale(scale)}
+              >
+                {FONT_SIZE_LABELS[index]
+                  ? t(FONT_SIZE_LABELS[index])
+                  : t('settingsFontSizeStandard')}
+              </button>
+            ))}
+          </div>
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup label={t('settingsPersonalizeLabel')}>
+        <SettingCell
+          label={t('settingsAutoCollapseThinkingLabel')}
+          description={t('settingsAutoCollapseThinkingDesc')}
+          status={null}
+          action={
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoCollapseThinking}
+              aria-label={t('settingsAutoCollapseThinkingLabel')}
+              className={styles.switch}
+              onClick={() => setAutoCollapseThinking(!autoCollapseThinking)}
+            >
+              <span className={styles.switchThumb} />
+            </button>
+          }
+        />
+        <SettingCell
+          label={t('modelSettingsShowTokenUsageLabel')}
+          description={t('settingsShowTokenUsageDesc')}
+          status={null}
+          action={
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showTokenUsage}
+              aria-label={t('modelSettingsShowTokenUsageLabel')}
+              className={styles.switch}
+              onClick={() => setShowTokenUsage(!showTokenUsage)}
+            >
+              <span className={styles.switchThumb} />
+            </button>
+          }
+        />
+      </SettingsGroup>
+    </>
+  )
+}
+
 const SettingsContent = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
@@ -132,7 +345,15 @@ const SettingsContent = () => {
     }
   }
 
-  const current = opened ? sections.find((item) => item.value === opened) : null
+  // 子页标题：首页入口列表只含部分分组，appearance 等单独补标题
+  const current = opened
+    ? (sections.find((item) => item.value === opened) ?? {
+        value: opened,
+        label: opened === 'appearance' ? 'settingsAppearanceLabel' : 'settings',
+        desc: 'settingsPageSubtitle',
+        icon: null,
+      })
+    : null
 
   const renderSection = () => {
     if (opened === 'general') {
@@ -149,6 +370,9 @@ const SettingsContent = () => {
     }
     if (opened === 'model') {
       return <ModelSettings apiKeyEditor={apiKeyEditor} isMobile={isMobile} />
+    }
+    if (opened === 'appearance') {
+      return <AppearanceSettings />
     }
     if (opened === 'memory') {
       return <MemorySettings />
@@ -183,18 +407,8 @@ const SettingsContent = () => {
           {renderSection()}
         </SettingsPage>
       ) : (
-        <SettingsPage title={t('settings')} subtitle={t('settingsPageSubtitle')} onClose={close}>
-          <div role="list">
-            {sections.map((item) => (
-              <SettingsEntry
-                key={item.value}
-                icon={item.icon}
-                title={t(item.label)}
-                description={t(item.desc)}
-                onClick={() => setOpened(item.value)}
-              />
-            ))}
-          </div>
+        <SettingsPage title={t('settings')} onClose={close}>
+          <SettingsHomeGroups open={setOpened} />
         </SettingsPage>
       )}
       {historyImport.file ? <ImportConfirm historyImport={historyImport} /> : null}

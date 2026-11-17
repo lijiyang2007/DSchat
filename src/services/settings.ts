@@ -87,8 +87,12 @@ export type Settings = {
   visionSupport: VisionSupport
   /** 流式输出的节流强度 */
   streamThrottle: StreamThrottle
-  /** 是否在每条回复下显示 token 用量 */
+  /** 是否在每条回复下方显示 token 用量 */
   showTokenUsage: boolean
+  /** 界面字号缩放：0.9 / 1 / 1.1 / 1.2，跟随系统为 1 */
+  fontScale: number
+  /** 思考结束后自动折叠思考内容 */
+  autoCollapseThinking: boolean
   // 多能力独立渠道
   asrChannel: ServiceChannelConfig
   ttsChannel: TtsChannelConfig
@@ -139,6 +143,8 @@ const KEYS = {
   visionSupport: 'chat-demo:vision-support',
   streamThrottle: 'chat-demo:stream-throttle',
   showTokenUsage: 'chat-demo:show-token-usage',
+  fontScale: 'chat-demo:font-scale',
+  autoCollapseThinking: 'chat-demo:auto-collapse-thinking',
   asrChannel: 'chat-demo:asr-channel',
   ttsChannel: 'chat-demo:tts-channel',
   safetyCheck: 'chat-demo:safety-check',
@@ -210,6 +216,15 @@ const initialLocation = (): UserLocation | null => {
 const initialThemePreference = (): ThemePreference => {
   const saved = read(KEYS.themePreference)
   return saved === 'light' || saved === 'dark' ? saved : 'system'
+}
+
+/** 未保存过时跟随系统（1.0） */
+/** 可选字号档位 */
+export const FONT_SCALES = [0.9, 1, 1.1, 1.2] as const
+
+const initialFontScale = (): number => {
+  const saved = Number(read(KEYS.fontScale))
+  return FONT_SCALES.includes(saved as (typeof FONT_SCALES)[number]) ? saved : 1
 }
 
 /** 未保存过时使用服务端默认音色 stella（海星） */
@@ -330,6 +345,8 @@ export const useSettings = create<Settings>(() => ({
   visionSupport: initialVisionSupport(),
   streamThrottle: initialStreamThrottle(),
   showTokenUsage: readBool(KEYS.showTokenUsage, true),
+  fontScale: initialFontScale(),
+  autoCollapseThinking: readBool(KEYS.autoCollapseThinking, true),
   asrChannel: readChannel(KEYS.asrChannel),
   ttsChannel: readTtsChannel(KEYS.ttsChannel),
   safetyCheck: readBool(KEYS.safetyCheck, true),
@@ -420,6 +437,31 @@ export const setStreamThrottle = (streamThrottle: StreamThrottle) => {
 
 export const setShowTokenUsage = (value: boolean) =>
   setBoolSetting(KEYS.showTokenUsage, 'showTokenUsage', value)
+
+/** 界面字号缩放；写入后立即应用到 <html> 上的 --ds-font-scale */
+export const setFontScale = (fontScale: number) => {
+  const next = FONT_SCALES.includes(fontScale as (typeof FONT_SCALES)[number]) ? fontScale : 1
+  write(KEYS.fontScale, String(next))
+  useSettings.setState({ fontScale: next })
+  applyFontScale(next)
+}
+
+export const setAutoCollapseThinking = (value: boolean) =>
+  setBoolSetting(KEYS.autoCollapseThinking, 'autoCollapseThinking', value)
+
+/** 把字号缩放写到根元素：CSS 变量给继承字号用，data 属性给整页 zoom 用 */
+export const applyFontScale = (fontScale: number) => {
+  if (typeof document === 'undefined') {
+    return
+  }
+  const root = document.documentElement
+  root.style.setProperty('--ds-font-scale', String(fontScale))
+  if (fontScale === 1) {
+    delete root.dataset.fontScale
+  } else {
+    root.dataset.fontScale = String(fontScale)
+  }
+}
 
 export const setSearch = (search: boolean) => {
   write(KEYS.search, String(search))

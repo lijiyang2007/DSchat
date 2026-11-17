@@ -2,33 +2,61 @@ import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
+  IconCheckOutline16,
   IconCloseFill14,
   IconPanelLeftOutline16,
   IconSearchOutline16,
   IconSettingsOutline16,
+  IconSortOutline16,
   NewChatIcon,
 } from '../base/icons.js'
-import { setSiderCollapsed } from '../../services/settings.js'
+import { setSiderCollapsed, useSettings } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
-import { sortWithPinned } from '../../services/chat/sessionSearch.js'
 import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
+import { Menu } from '../base/Menu.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { openSettingsHome } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
+import { setSessionSort, sortSessions, useSessionSort, type SessionSort } from './sessionSortState.js'
 import styles from './Sider.module.css'
 
-/** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
+/** 账号入口：把 API Key 打码后当作身份展示，没有 Key 时显示本地账户 */
+const maskAccount = (apiKey: string | null): string => {
+  const key = (apiKey ?? '').trim()
+  if (!key) {
+    return ''
+  }
+  if (key.length <= 10) {
+    return `${key.slice(0, 2)}****${key.slice(-2)}`
+  }
+  return `${key.slice(0, 4)}****${key.slice(-4)}`
+}
+
+/**
+ * 展开的侧边栏：顶部搜索框、新建对话、按时间分组的会话目录、底部账号与设置。
+ * 移动端放在抽屉里，收起按钮关闭抽屉。
+ */
 export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
+  const apiKey = useSettings((state) => state.apiKey)
+  const sort = useSessionSort((state) => state.sort)
   const [now, setNow] = useState(Date.now)
-  const groups = useMemo(() => groupSessions(sortWithPinned(sessions), now, t), [sessions, now, t])
+  const ordered = useMemo(() => sortSessions(sessions, sort), [sessions, sort])
+  // 只有按更新时间排时才按日期分组；换成标题/创建时间后日期不再单调，分组会碎成好几段
+  const groups = useMemo(
+    () =>
+      sort === 'updatedAt'
+        ? groupSessions(ordered, now, t)
+        : [{ key: 'all', label: t('sessionGroupAll'), sessions: ordered }],
+    [ordered, now, t, sort]
+  )
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
   const [deletePending, setDeletePending] = useState(false)
   const [query, setQuery] = useState('')
@@ -38,8 +66,14 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
     if (!keyword) {
       return null
     }
-    return sessions.filter((session) => session.title.toLowerCase().includes(keyword))
-  }, [query, sessions])
+    return ordered.filter((session) => session.title.toLowerCase().includes(keyword))
+  }, [query, ordered])
+
+  const sortOptions: { key: SessionSort; labelKey: 'sessionSortByUpdated' | 'sessionSortByCreated' | 'sessionSortByTitle' }[] = [
+    { key: 'updatedAt', labelKey: 'sessionSortByUpdated' },
+    { key: 'createdAt', labelKey: 'sessionSortByCreated' },
+    { key: 'title', labelKey: 'sessionSortByTitle' },
+  ]
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -65,18 +99,11 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
     }
   }, [])
 
+  const account = maskAccount(apiKey)
+  const accountLabel = account || t('accountLocalLabel')
+
   return (
     <div className={clsx(styles.sider, mobile && styles.mobile)}>
-      <div className={styles.top}>
-        <div className={styles.appName}>{t('appName')}</div>
-        <IconButton
-          size="m"
-          icon={<IconPanelLeftOutline16 />}
-          tooltip={t('collapseSiderbarButton')}
-          tooltipPlacement="bottom"
-          onClick={() => (mobile ? closeMobileSider() : setSiderCollapsed(true))}
-        />
-      </div>
       <div className={styles.searchWrap}>
         <span className={styles.searchIcon}>
           <IconSearchOutline16 />
@@ -129,9 +156,33 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
               <div className={styles.searchEmpty}>{t('sessionSearchNoResult')}</div>
             )
           ) : (
-            groups.map((group) => (
+            groups.map((group, index) => (
               <div key={group.key} className={styles.section}>
-                <div className={styles.sectionHeader}>{group.label}</div>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.sectionLabel}>{group.label}</span>
+                  {index === 0 ? (
+                    <Menu
+                      options={sortOptions.map((option) => ({
+                        key: option.key,
+                        label: t(option.labelKey),
+                        icon: option.key === sort ? <IconCheckOutline16 /> : <span />,
+                        onSelect: () => setSessionSort(option.key),
+                      }))}
+                    >
+                      {({ toggle, open }) => (
+                        <button
+                          type="button"
+                          className={styles.sortButton}
+                          aria-label={t('sessionSortLabel')}
+                          aria-expanded={open}
+                          onClick={toggle}
+                        >
+                          <IconSortOutline16 />
+                        </button>
+                      )}
+                    </Menu>
+                  ) : null}
+                </div>
                 {group.sessions.map((session) => (
                   <SessionItem
                     key={session.id}
@@ -146,12 +197,39 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
         </div>
       </div>
       <div className={styles.bottom}>
-        <button type="button" className={styles.settings} onClick={openSettingsHome}>
-          <span className={styles.settingsIcon}>
-            <IconSettingsOutline16 />
+        <button
+          type="button"
+          className={styles.account}
+          onClick={() => {
+            openSettingsHome()
+            if (mobile) {
+              closeMobileSider()
+            }
+          }}
+        >
+          <span className={styles.avatar} aria-hidden>
+            {accountLabel.slice(0, 1).toUpperCase()}
           </span>
-          <span className={styles.settingsLabel}>{t('settings')}</span>
+          <span className={styles.accountLabel}>{accountLabel}</span>
         </button>
+        <div className={styles.bottomActions}>
+          <IconButton
+            size="m"
+            tone="tertiary"
+            icon={<IconSettingsOutline16 />}
+            tooltip={t('settings')}
+            tooltipPlacement="top"
+            onClick={openSettingsHome}
+          />
+          <IconButton
+            size="m"
+            tone="tertiary"
+            icon={<IconPanelLeftOutline16 />}
+            tooltip={t('collapseSiderbarButton')}
+            tooltipPlacement="top"
+            onClick={() => (mobile ? closeMobileSider() : setSiderCollapsed(true))}
+          />
+        </div>
       </div>
       {deleting ? (
         <Modal
@@ -194,7 +272,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   )
 }
 
-/** 移动端抽屉：位于主内容层下方，主内容左/右滑时丝滑显露 */
+/** 移动端抽屉：位于主内容层下方，主内容右滑时丝滑显露 */
 export const MobileSider = () => {
   const open = useMobileSider((state) => state.open)
   return (

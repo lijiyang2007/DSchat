@@ -16,7 +16,6 @@
   gap: 8px;
   padding: 10px 14px;
   padding-top: max(10px, env(safe-area-inset-top));
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .headerSpacer {
@@ -26,23 +25,24 @@
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px 6px 6px;
+  gap: 2px;
+  padding: 6px 10px 6px 2px;
   border: none;
   border-radius: 8px;
   background: none;
-  color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
-}
 
-.back:hover {
-  background-color: var(--dsw-alias-interactive-bg-hover);
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .backIcon {
   display: inline-flex;
+  color: var(--dsw-alias-label-secondary);
   transform: rotate(180deg);
 }
 
@@ -57,21 +57,24 @@
 .bodyInner {
   box-sizing: border-box;
   width: 100%;
-  max-width: 680px;
+  max-width: 640px;
   margin: 0 auto;
-  padding: 20px 18px 40px;
+  padding: 4px 16px 40px;
   padding-bottom: max(40px, env(safe-area-inset-bottom));
 }
 
 .title {
-  margin: 0 0 6px;
-  font-size: 24px;
-  line-height: 32px;
+  margin: 0 0 20px;
+  padding: 0 4px;
+  font-size: 30px;
+  line-height: 38px;
   font-weight: 600;
+  color: var(--dsw-alias-label-primary);
 }
 
 .subtitle {
-  margin: 0 0 18px;
+  margin: -14px 0 20px;
+  padding: 0 4px;
   font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
@@ -80,6 +83,7 @@
 .content {
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
 .footer {
@@ -89,28 +93,67 @@
   border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
-/* 主页面入口行 */
+/* 分组卡片 */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupLabel {
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+.groupCard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  /* 卡片底色比页面略浅/略深，靠主题变量适配明暗外观 */
+  background-color: var(--dsw-specific-sidebar-fill);
+}
+
+/* 设置行 */
 .entry {
   display: flex;
   align-items: center;
   gap: 12px;
+  box-sizing: border-box;
   width: 100%;
-  padding: 14px 12px;
+  min-height: 56px;
+  padding: 14px 12px 14px 14px;
   border: none;
-  border-radius: 12px;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  outline: none;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  & + & {
+    box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+  }
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:active {
+    background-color: var(--dsw-alias-interactive-bg-active);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--dsw-alias-button-primary-fill);
+  }
 }
 
-.entry:hover {
-  background-color: var(--dsw-alias-interactive-bg-hover);
-}
-
-.entry + .entry {
-  box-shadow: inset 0 1px 0 0 var(--dsw-alias-border-l2-darkmode-thin);
+.entry[data-danger='true'] {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .entryIcon {
@@ -118,30 +161,36 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background-color: var(--dsw-alias-bg-layer-2);
+  width: 24px;
+  height: 24px;
   color: var(--dsw-alias-label-secondary);
+}
+
+.entry[data-danger='true'] .entryIcon {
+  color: inherit;
 }
 
 .entryText {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .entryTitle {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
 }
 
+.entry[data-danger='true'] .entryTitle {
+  color: inherit;
+}
+
 .entryDesc {
   font-size: 12px;
-  line-height: 18px;
+  line-height: 17px;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -151,8 +200,37 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 右侧当前值：与系统设置一致，弱化显示 */
+.entryValue {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 22px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .entryArrow {
   display: inline-flex;
   flex-shrink: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-dimmed);
+}
+
+@media not all and (min-width: 768px) {
+  .bodyInner {
+    padding: 2px 12px 32px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+  }
+
+  .title {
+    margin-bottom: 18px;
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .content {
+    gap: 22px;
+  }
 }

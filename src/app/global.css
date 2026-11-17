@@ -1,6 +1,8 @@
 :root {
   --message-list-max-width: 840px;
   --message-list-padding-horizontal: 44px;
+  /* 界面字号缩放：由设置里的「字体大小」写入，1 为跟随系统 */
+  --ds-font-scale: 1;
 }
 
 @media (max-width: 1023px) {
@@ -10,12 +12,33 @@
   }
 }
 
+html {
+  /* 字号缩放：设置里切档时由 applyFontScale 写入 data-font-scale */
+  font-size: calc(100% * var(--ds-font-scale));
+}
+
+/**
+ * 整页等比缩放：组件里有大量写死的 px 字号，单纯放大根字号带不动它们。
+ * 用 zoom 统一放大，字号 / 间距 / 图标一起变，视觉比例才和系统设置一致。
+ */
+html[data-font-scale='0.9'] {
+  zoom: 0.9;
+}
+
+html[data-font-scale='1.1'] {
+  zoom: 1.1;
+}
+
+html[data-font-scale='1.2'] {
+  zoom: 1.2;
+}
+
 body {
   overflow: hidden;
   margin: 0;
   word-break: break-word;
   font-family: var(--dsw-font-family);
-  font-size: var(--ds-font-size-m);
+  font-size: calc(var(--ds-font-size-m) * var(--ds-font-scale));
   color: var(--dsw-alias-label-primary);
   background-color: var(--dsw-alias-bg-base);
   -webkit-text-size-adjust: none;
