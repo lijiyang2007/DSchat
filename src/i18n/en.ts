@@ -190,6 +190,7 @@ export const en = {
   uploadFileStatusFailed: 'Upload failed',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',
+  chatInputPlaceholderMobile: 'Message or hold to talk',
   deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
   thinkingEffortLowShort: 'Low',

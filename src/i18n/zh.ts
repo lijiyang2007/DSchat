@@ -182,6 +182,7 @@ export const zh = {
   uploadFileStatusFailed: '上传失败',
   uploadRetry: '{message}，点击重试',
   chatInputPlaceholderChat: '请输入消息',
+  chatInputPlaceholderMobile: '发消息或按住说话',
   deactivatedThinkTooltip: '先思考后回答，解决推理问题',
   thinkingSwitch: '深度思考',
   thinkingEffortLowShort: '轻度思考',
