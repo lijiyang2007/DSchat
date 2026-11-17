@@ -21,7 +21,6 @@ import {
   setKeepRefusedContent,
   setMaxTokens,
   setModel,
-  setOcrChannel,
   setReadUrl,
   setRefusalCaseSensitive,
   setRefusalEnabled,
@@ -37,7 +36,6 @@ import {
   setTemperature,
   setTopP,
   setTtsChannel,
-  setVisionChannel,
   useSettings,
   type ChatProtocol,
   type StreamThrottle,
@@ -381,25 +379,25 @@ export const ModelSettings = ({
         </div>
       </div>
 
-      <div className={`${styles.cell} ${styles.row}`}>
-        <div className={styles.text}>
+      <div className={styles.cell}>
+        <div className={styles.field}>
           <div className={styles.label}>{t('chatProtocolLabel')}</div>
           <div className={styles.description}>{t('chatProtocolDesc')}</div>
-        </div>
-        <Select
-          value={settings.chatProtocol}
-          options={protocolOptions}
-          ariaLabel={t('chatProtocolLabel')}
-          onChange={(protocol) => {
+          <Select
+            value={settings.chatProtocol}
+            options={protocolOptions}
+            ariaLabel={t('chatProtocolLabel')}
+            onChange={(protocol) => {
             setChatProtocol(protocol)
-            if (protocol === 'local' && !settings.apiOrigin.trim()) {
-              setApiOrigin('http://127.0.0.1:11434/v1')
-              if (settings.model === DEFAULT_MODEL) {
-                setModel('')
+              if (protocol === 'local' && !settings.apiOrigin.trim()) {
+                setApiOrigin('http://127.0.0.1:11434/v1')
+                if (settings.model === DEFAULT_MODEL) {
+                  setModel('')
+                }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
 
       <div className={styles.cell}>
@@ -620,6 +618,7 @@ export const ModelSettings = ({
       <div className={styles.cell}>
         <div className={styles.field}>
           <div className={styles.description}>{t('modelSettingsChannelsHint')}</div>
+          <div className={styles.description}>{t('modelSettingsChannelsHintAlt')}</div>
           <div className={styles.description}>{t('modelSettingsSectionChannelsVoiceHint')}</div>
           <CapabilityChannelCard
             title={t('channelAsrTitle')}
@@ -637,22 +636,6 @@ export const ModelSettings = ({
             modelPlaceholder="tts-1"
             withVoice
             onChange={setTtsChannel}
-          />
-          <CapabilityChannelCard
-            title={t('channelVisionTitle')}
-            channel={settings.visionChannel}
-            fallbackBaseUrl={mainBaseUrl}
-            fallbackApiKey={mainApiKey}
-            modelPlaceholder="gpt-4o / qwen-vl-max"
-            onChange={setVisionChannel}
-          />
-          <CapabilityChannelCard
-            title={t('channelOcrTitle')}
-            channel={settings.ocrChannel}
-            fallbackBaseUrl={mainBaseUrl}
-            fallbackApiKey={mainApiKey}
-            modelPlaceholder="qwen-vl-ocr / gpt-4o"
-            onChange={setOcrChannel}
           />
         </div>
       </div>

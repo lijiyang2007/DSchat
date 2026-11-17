@@ -77,19 +77,6 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
           onClick={() => (mobile ? closeMobileSider() : setSiderCollapsed(true))}
         />
       </div>
-      <button
-        type="button"
-        className={styles.newChat}
-        onClick={() => {
-          newChat()
-          closeMobileSider()
-        }}
-      >
-        <span className={styles.newChatIcon}>
-          <NewChatIcon />
-        </span>
-        {t('newChat')}
-      </button>
       <div className={styles.searchWrap}>
         <span className={styles.searchIcon}>
           <IconSearchOutline16 />
@@ -113,6 +100,19 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
           </button>
         ) : null}
       </div>
+      <button
+        type="button"
+        className={styles.newChat}
+        onClick={() => {
+          newChat()
+          closeMobileSider()
+        }}
+      >
+        <span className={styles.newChatIcon}>
+          <NewChatIcon />
+        </span>
+        {t('newChat')}
+      </button>
       <div className={styles.listWrap}>
         <div className={styles.list}>
           {filtered ? (

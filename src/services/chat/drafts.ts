@@ -24,10 +24,8 @@ export type DraftAttachment = {
 
 /** 仅当主协议为 DeepSeek 且未切走视觉/OCR 且未开启生图直出时，才需要预先上传到 DeepSeek Files API */
 export const shouldUseLocalAttachmentOnly = (): boolean => {
-  const { chatProtocol, visionChannel, ocrChannel } = useSettings.getState()
-  return (
-    chatProtocol !== 'deepseek' || visionChannel.mode === 'custom' || ocrChannel.mode === 'custom'
-  )
+  const { chatProtocol } = useSettings.getState()
+  return chatProtocol !== 'deepseek'
 }
 
 type Draft = { text: string; attachments: DraftAttachment[] }

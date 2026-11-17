@@ -351,7 +351,8 @@ export const en = {
   fetchedModelsPlaceholder: 'Select from fetched models…',
   modelSettingsSectionChannelsVoiceHint:
     'Speech recognition and synthesis are provided only by DeepSeek official (/v1/tools/asr, /v1/tools/tts). With a third-party gateway, fill the official address and key below',
-  modelSettingsSectionChannels: 'Speech / Vision / OCR Channels',
+  modelSettingsSectionChannels: 'Speech channels',
+  modelSettingsChannelsHintAlt: 'Images and documents are handled by the current model — no separate vision or OCR channel needed',
   modelSettingsChannelsHint:
     'Inherits main DeepSeek service by default; switch any capability to custom to use another provider',
   channelInheritHint:
@@ -364,8 +365,6 @@ export const en = {
   channelVoiceLabel: 'Voice',
   channelAsrTitle: 'Speech Recognition (ASR)',
   channelTtsTitle: 'Text-to-Speech (TTS)',
-  channelVisionTitle: 'Image Recognition (Vision)',
-  channelOcrTitle: 'Text / Document Recognition (OCR)',
   autoPlayVoiceOnToast: 'Auto voice playback enabled',
   autoPlayVoiceOffToast: 'Auto voice playback muted',
   autoPlayVoiceEnableTooltip: 'Enable auto voice playback',

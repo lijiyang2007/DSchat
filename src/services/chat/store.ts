@@ -1157,35 +1157,26 @@ const prepareInlineAttachments = async (
       continue
     }
 
+    // 图片与文档都交给原模型处理，不再有独立的识图 / OCR 渠道
     if (file.isImage) {
       const dataUrl = await blobToDataUrl(blob)
-      // 模型明确不支持看图时，即使有视觉渠道也先转成文字描述，避免接口报错
       const modelSeesImages = allowsVision(
         settings.visionSupport,
         settings.model,
         settings.chatProtocol
       )
-      if (
-        (settings.visionChannel.mode === 'custom' || !modelSeesImages) &&
-        isCurrentQuestionFile
-      ) {
-        // 模型不支持看图且没配视觉渠道时，退回主模型做一次识别（多数多模态模型可用）
-        const visionKey =
-          settings.visionChannel.apiKey.trim() ||
-          settings.apiKey ||
-          ''
-        const visionOrigin = settings.visionChannel.baseUrl.trim() || getApiOrigin()
-        const visionModel = settings.visionChannel.model.trim() || settings.model
+      if (!modelSeesImages && isCurrentQuestionFile) {
+        // 模型不支持看图时，仍用同一模型尝试转成文字描述，避免直接发图报错
         const desc = await recognizeWithOpenAIVision({
-          baseUrl: visionOrigin,
-          apiKey: visionKey,
-          model: visionModel,
+          baseUrl: getApiOrigin(),
+          apiKey: settings.apiKey ?? '',
+          model: settings.model,
           prompt: `请详细识别并描述这张图片（${file.name}）中的关键内容、文字与细节，供后续对话回答使用。`,
           dataUrl,
           signal,
         })
         if (desc) {
-          extraNotes.push(`[图片识别（${file.name}）：${desc}]`)
+          extraNotes.push(`[图片内容（${file.name}）：${desc}]`)
         }
         strippedFileIds.add(file.id)
       } else if (settings.chatProtocol !== 'deepseek') {
@@ -1194,31 +1185,9 @@ const prepareInlineAttachments = async (
       continue
     }
 
-    // 非图片文件（文档 / 文字识别）
+    // 非图片文件：能直接读文本的就内联，其余交给模型
     const isTextReadable = TEXT_MIME_RE.test(file.mimeType) || TEXT_EXT_RE.test(file.name)
-    if (settings.ocrChannel.mode === 'custom' && isCurrentQuestionFile) {
-      if (isTextReadable && blob.size <= 512 * 1024) {
-        const content = await blob.text()
-        extraNotes.push(`[文件文本（${file.name}）：\n${content.slice(0, 12000)}]`)
-      } else {
-        const ocrKey = settings.ocrChannel.apiKey.trim() || settings.apiKey || ''
-        const ocrOrigin = settings.ocrChannel.baseUrl.trim() || getApiOrigin()
-        const ocrModel = settings.ocrChannel.model.trim() || settings.model
-        const dataUrl = await blobToDataUrl(blob)
-        const text = await recognizeWithOpenAIVision({
-          baseUrl: ocrOrigin,
-          apiKey: ocrKey,
-          model: ocrModel,
-          prompt: `请完整提取并识别文件「${file.name}」中的所有文字内容。`,
-          dataUrl,
-          signal,
-        })
-        if (text) {
-          extraNotes.push(`[文字识别（${file.name}）：${text}]`)
-        }
-      }
-      strippedFileIds.add(file.id)
-    } else if (settings.chatProtocol !== 'deepseek' && isTextReadable && blob.size <= 512 * 1024) {
+    if (settings.chatProtocol !== 'deepseek' && isTextReadable && blob.size <= 512 * 1024) {
       const content = await blob.text()
       inlineTexts.set(key, `[文件：${file.name}]\n${content.slice(0, 12000)}`)
     }
@@ -1401,10 +1370,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       try {
         const settings = useSettings.getState()
         const turnModel = initial.model ?? (settings.model.trim() || MODEL)
-        const useDeepSeekFiles =
-          settings.chatProtocol === 'deepseek' &&
-          settings.visionChannel.mode === 'inherit' &&
-          settings.ocrChannel.mode === 'inherit'
+        const useDeepSeekFiles = settings.chatProtocol === 'deepseek'
         const prepared = useDeepSeekFiles
           ? await prepareFiles(sessionId, request, controller.signal)
           : {

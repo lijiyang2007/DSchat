@@ -330,9 +330,10 @@ export const zh = {
   fetchModelsSuccess: '已获取 {count} 个可用模型',
   fetchModelsFailed: '获取模型失败：{message}',
   fetchedModelsPlaceholder: '从已获取列表选择模型…',
-  modelSettingsSectionChannels: '语音 / 视觉 / 文字识别渠道',
+  modelSettingsSectionChannels: '语音渠道',
   modelSettingsSectionChannelsVoiceHint:
     '语音识别与语音合成都只由 DeepSeek 官方提供（/v1/tools/asr、/v1/tools/tts）。用第三方中转时请在下面单独填官方地址和 Key',
+  modelSettingsChannelsHintAlt: '图片与文档直接交给当前模型处理，无需单独配置识图/OCR 渠道',
   modelSettingsChannelsHint:
     '默认跟随主 DeepSeek 服务（无需另填）；如需接别家服务可分别切换为自定义',
   channelModeInherit: '跟随主服务',
@@ -345,8 +346,6 @@ export const zh = {
   channelVoiceLabel: '音色（Voice）',
   channelAsrTitle: '语音识别（ASR）',
   channelTtsTitle: '语音合成（TTS）',
-  channelVisionTitle: '图片识别（Vision）',
-  channelOcrTitle: '文字识别（OCR / 文档）',
   autoPlayVoiceOnToast: '已开启回复语音自动播报',
   autoPlayVoiceOffToast: '已关闭语音自动播报',
   autoPlayVoiceEnableTooltip: '开启语音自动播报',

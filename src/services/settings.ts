@@ -92,8 +92,6 @@ export type Settings = {
   // 多能力独立渠道
   asrChannel: ServiceChannelConfig
   ttsChannel: TtsChannelConfig
-  visionChannel: ServiceChannelConfig
-  ocrChannel: ServiceChannelConfig
   // 协议与工具开关
   safetyCheck: boolean
   readUrl: boolean
@@ -143,8 +141,6 @@ const KEYS = {
   showTokenUsage: 'chat-demo:show-token-usage',
   asrChannel: 'chat-demo:asr-channel',
   ttsChannel: 'chat-demo:tts-channel',
-  visionChannel: 'chat-demo:vision-channel',
-  ocrChannel: 'chat-demo:ocr-channel',
   safetyCheck: 'chat-demo:safety-check',
   readUrl: 'chat-demo:read-url',
   sendLatestReminder: 'chat-demo:send-latest-reminder',
@@ -336,8 +332,6 @@ export const useSettings = create<Settings>(() => ({
   showTokenUsage: readBool(KEYS.showTokenUsage, true),
   asrChannel: readChannel(KEYS.asrChannel),
   ttsChannel: readTtsChannel(KEYS.ttsChannel),
-  visionChannel: readChannel(KEYS.visionChannel),
-  ocrChannel: readChannel(KEYS.ocrChannel),
   safetyCheck: readBool(KEYS.safetyCheck, true),
   readUrl: readBool(KEYS.readUrl, true),
   sendLatestReminder: readBool(KEYS.sendLatestReminder, true),
@@ -450,16 +444,6 @@ export const setAsrChannel = (asrChannel: ServiceChannelConfig) => {
 export const setTtsChannel = (ttsChannel: TtsChannelConfig) => {
   write(KEYS.ttsChannel, JSON.stringify(ttsChannel))
   useSettings.setState({ ttsChannel })
-}
-
-export const setVisionChannel = (visionChannel: ServiceChannelConfig) => {
-  write(KEYS.visionChannel, JSON.stringify(visionChannel))
-  useSettings.setState({ visionChannel })
-}
-
-export const setOcrChannel = (ocrChannel: ServiceChannelConfig) => {
-  write(KEYS.ocrChannel, JSON.stringify(ocrChannel))
-  useSettings.setState({ ocrChannel })
 }
 
 export const setApiOrigin = (apiOrigin: string) => {
@@ -577,8 +561,6 @@ export const resetModelAndPolicySettings = () => {
   setMaxTokens(null)
   setAsrChannel({ ...EMPTY_CHANNEL })
   setTtsChannel({ ...EMPTY_TTS_CHANNEL })
-  setVisionChannel({ ...EMPTY_CHANNEL })
-  setOcrChannel({ ...EMPTY_CHANNEL })
   setSafetyCheck(true)
   setReadUrl(true)
   setSendLatestReminder(true)
