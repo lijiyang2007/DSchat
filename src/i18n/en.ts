@@ -83,6 +83,7 @@ export const en = {
   accountApiKeyInUse: 'Using API key',
   accountSignOutConfirmTitle: 'Sign out',
   accountSignOutConfirmDescription: 'Sign out of "{account}"? You will need to sign in again to keep using your account quota.',
+  credentialsMissingToast: 'No credentials yet: sign in to your DeepSeek account or enter an API key',
   sessionGroupAll: 'All chats',
   sessionGroupCollapse: 'Collapse {label}',
   sessionGroupExpand: 'Expand {label}',

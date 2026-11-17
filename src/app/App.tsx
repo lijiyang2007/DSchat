@@ -15,7 +15,8 @@ import { closeSearchPanel } from '../components/search/searchPanelState.js'
 import { SessionView } from '../components/session/SessionView.js'
 import { MobileHeader } from '../components/session/MobileHeader.js'
 import { Welcome } from '../components/session/Welcome.js'
-import { ensureApiKey } from '../components/settings/settingsDialogState.js'
+import { accountToken } from '../services/account.js'
+import { openSettings } from '../components/settings/settingsDialogState.js'
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { TokenLimitModal } from '../components/settings/TokenLimitModal.js'
 import { UpdateModal } from '../components/settings/UpdateModal.js'
@@ -196,8 +197,11 @@ export const App = () => {
   useEffect(() => {
     void initChat()
     syncDailyTokenDate()
-    // 首次打开先在设置里输入 API Key
-    ensureApiKey()
+    // 首次打开没有任何凭据时进设置页引导配置。
+    // 静默检查即可：启动时不弹错误 toast（发消息时的检查才会提示）。
+    if (!useSettings.getState().apiKey && !accountToken() && useSettings.getState().chatProtocol !== 'local') {
+      openSettings('model')
+    }
     if (!useSettings.getState().autoCheckUpdate) {
       return
     }

@@ -79,6 +79,7 @@ export const zh = {
   accountApiKeyInUse: '当前使用 API Key',
   accountSignOutConfirmTitle: '退出登录',
   accountSignOutConfirmDescription: '确定退出「{account}」吗？退出后需要重新登录才能继续使用账号额度。',
+  credentialsMissingToast: '还没有可用的凭据：请登录 DeepSeek 账号，或填写 API Key',
   sessionGroupAll: '全部对话',
   sessionGroupCollapse: '收起「{label}」',
   sessionGroupExpand: '展开「{label}」',

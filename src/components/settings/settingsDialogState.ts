@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { useSettings } from '../../services/settings.js'
+import { accountToken } from '../../services/account.js'
+import { showToast } from '../base/toastState.js'
 
 /** 设置弹窗的分组：通用设置 / 模型与策略 / 长期记忆 / 数据管理 */
 export type SettingsSection =
@@ -79,12 +81,23 @@ export const handleSettingsBack = (): boolean => {
   return false
 }
 
-/** 没有 API Key 时打开设置并选中 API Key 所在的「模型与接口」；本地部署模式免密钥直接放行 */
-export const ensureApiKey = () => {
+/**
+ * 发送前的凭据检查：
+ * - 已登录 DeepSeek 账号（x-dsh-auth-token）→ 放行，走账号额度
+ * - 填了 API Key → 放行
+ * - 本地部署模式 → 免密钥放行
+ * - 什么都没有 → 打开设置并给出明确提示，不再静默跳页
+ */
+export const ensureApiKey = (): boolean => {
   const { apiKey, chatProtocol } = useSettings.getState()
   if (apiKey || chatProtocol === 'local') {
     return true
   }
+  // 账号登录态存在即视为有凭据：聊天请求会自动带 x-dsh-auth-token
+  if (accountToken()) {
+    return true
+  }
   openSettings('model')
+  showToast({ type: 'error', key: 'credentialsMissingToast' })
   return false
 }
