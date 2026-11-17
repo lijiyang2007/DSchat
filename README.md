@@ -5,6 +5,16 @@ This build is trimmed for phones and **removes voice calls, video calls (camera)
 
 Upstream: <https://github.com/YanJiuWeiYuanHui/DeepChat>
 
+## Disclaimer / 免责声明
+
+> [!IMPORTANT]
+> - **独立第三方客户端**：DSchat 是基于开源前端（MIT License）构建的第三方聊天客户端，与深度求索（DeepSeek）公司**无任何隶属、合作或授权关系**。"DeepSeek" 及相关名称归其权利人所有。
+> - **API 使用自担风险**：本应用调用 DeepSeek 官方 API 或任何第三方接口时，产生的**费用、额度消耗、数据传输均由用户自行承担**。请遵守对应服务商的用户协议、付费条款与用量政策。
+> - **账号与凭据安全**：登录 DeepSeek 账号使用的是平台官方 OAuth 流程（PKCE）。应用仅在本地存储凭据，不上传到任何第三方服务器；但请自行保管好账号与设备安全。
+> - **无任何担保**：本软件按"现状"（AS IS）提供，不附带任何明示或默示的担保。使用本软件造成的任何直接或间接损失（包括但不限于对话数据丢失、API 费用损失、账号风控），作者不承担责任。详见 [MIT License](LICENSE)。
+> - **合规使用**：请勿将本应用用于任何违反法律法规或服务条款的用途；生成内容由 AI 产出，请仔细甄别，不构成专业建议。
+> - **数据存储**：所有对话、附件、配置均保存在用户本地设备；卸载应用或清除数据将导致本地记录不可恢复，请自行做好备份。
+
 ## Differences from upstream
 
 | Item | Upstream DeepChat | This build |
