@@ -111,25 +111,38 @@ type Attempt = {
 
 let attempt: Attempt | null = null
 
-/** 回调地址：Android 用自定义 scheme，Web 用当前页面路径 */
+/**
+ * 回调地址必须是 loopback HTTP（http://127.0.0.1:端口/oauth/callback）。
+ * 平台对 redirect_uri 做严格校验：自定义 scheme 会被判 PAYLOAD_SCHEMA_MISMATCH（50005）。
+ *
+ * - Android：用内置本地代理的端口，回调由 ProxyBridge 拦下再转给前端
+ * - Web/开发：用当前页面的 origin（本身也是 127.0.0.1）
+ */
 export const callbackUrl = (): string => {
   if (typeof window === 'undefined') {
     return 'http://127.0.0.1/oauth/callback'
   }
-  const bridge = (window as { __DEEPCHAT_ANDROID_BRIDGE__?: { getAppInfo?: () => string } })
-    .__DEEPCHAT_ANDROID_BRIDGE__
-  if (bridge?.getAppInfo) {
-    // Android：由 MainActivity 拦截 dschat://oauth/callback
-    return 'dschat://oauth/callback'
+  const bridge = (window as {
+    __DEEPCHAT_ANDROID_BRIDGE__?: { getProxyOrigin?: () => string }
+  }).__DEEPCHAT_ANDROID_BRIDGE__
+  const proxyOrigin = bridge?.getProxyOrigin?.()
+  if (proxyOrigin && /^http:\/\/127\.0\.0\.1:\d+$/i.test(proxyOrigin)) {
+    // Android：本地代理已经在监听 127.0.0.1:端口
+    return `${proxyOrigin}/oauth/callback`
   }
-  return `${window.location.origin}/oauth/callback`
+  const { origin } = window.location
+  // file:// 打开时没有可用 origin，退回固定 loopback
+  if (!/^https?:\/\//i.test(origin)) {
+    return 'http://127.0.0.1:3080/oauth/callback'
+  }
+  return `${origin}/oauth/callback`
 }
 
 const post = async <T>(path: string, body: unknown): Promise<T> => {
   // 平台接口没开 CORS，必须走本地代理（Android 的 ProxyBridge / Web 的 /__api_proxy__）
   const response = await fetchWithDevProxy(`${AUTH_BASE}/${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...clientHeaders() },
     body: JSON.stringify(body),
   })
   if (!response.ok) {
@@ -137,10 +150,14 @@ const post = async <T>(path: string, body: unknown): Promise<T> => {
   }
   const payload = (await response.json()) as {
     code?: number
-    data?: { biz_code?: number; biz_data?: T }
+    msg?: string
+    data?: { biz_code?: number; biz_msg?: string; biz_data?: T }
   }
   if (payload.code !== 0 || payload.data?.biz_code !== 0 || !payload.data?.biz_data) {
-    throw new Error(`平台返回错误（code ${payload.code ?? '?'} / biz ${payload.data?.biz_code ?? '?'}）`)
+    const code = payload.code ?? '?'
+    const biz = payload.data?.biz_code ?? '?'
+    const msg = payload.data?.biz_msg || payload.msg || ''
+    throw new Error(`平台返回错误（code ${code} / biz ${biz}）${msg ? `：${msg}` : ''}`)
   }
   return payload.data.biz_data
 }
@@ -151,6 +168,21 @@ const clientMeta = () => ({
   locale: navigator.language.startsWith('zh') ? 'zh_CN' : 'en_US',
   timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
 })
+
+/**
+ * 平台要求每个账号接口都带这五个客户端标识头，缺了会返回业务码 50005。
+ * 这几个头是官方桌面版 platformClientHeaders() 的等价实现。
+ */
+const clientHeaders = (): Record<string, string> => {
+  const meta = clientMeta()
+  return {
+    'x-client-bundle-id': '',
+    'x-client-platform': 'web',
+    'x-client-version': meta.version,
+    'x-client-locale': meta.locale,
+    'x-client-timezone-offset': String(meta.timezoneOffsetSeconds),
+  }
+}
 
 /** 开始登录：拿到授权地址并打开浏览器 */
 export const startSignIn = async (): Promise<string> => {

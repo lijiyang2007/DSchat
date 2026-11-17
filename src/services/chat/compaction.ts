@@ -232,3 +232,56 @@ export const contextUsageRatio = (
   const used = estimateHistoryTokens(history, compaction) + extraTokens
   return window > 0 ? Math.min(1, used / window) : 0
 }
+
+/**
+ * 从历史里读出服务端真实返回的上下文占用。
+ *
+ * 之前只按字符数估算（chars / 2.2），中文、代码、附件都估不准，
+ * 用户看到的百分比和实际差得远，像是「只是个样子」。
+ * 其实每条助手回复都带 usage：input_tokens 就是那一轮实际发过去的上下文，
+ * 加上该轮输出，就是当前真实占用。
+ *
+ * @param history 当前可见消息（按时间顺序）
+ * @returns 真实占用 token 数；没有任何 usage 记录时返回 null
+ */
+export const actualContextTokens = (history: Message[]): number | null => {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i]
+    if (message.role !== 'assistant' || !message.usage) {
+      continue
+    }
+    const { input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens } =
+      message.usage
+    // input 三类相加才是完整上下文（缓存命中的部分单独计）
+    const total =
+      (input_tokens ?? 0) +
+      (cache_creation_input_tokens ?? 0) +
+      (cache_read_input_tokens ?? 0) +
+      (output_tokens ?? 0)
+    if (total > 0) {
+      return total
+    }
+  }
+  return null
+}
+
+/**
+ * 上下文占用比例：优先用服务端真实 token，没有记录时才退回估算。
+ * @returns { ratio, tokens, estimated } —— estimated 为 true 表示是估算值
+ */
+export const contextUsageDetail = (
+  history: Message[],
+  compaction: Compaction | undefined,
+  model: string,
+  extraTokens = 0,
+  override?: number
+): { ratio: number; tokens: number; estimated: boolean } => {
+  const window = getContextWindow(model, override)
+  const actual = actualContextTokens(history)
+  if (actual !== null) {
+    const tokens = actual + extraTokens
+    return { ratio: window > 0 ? Math.min(1, tokens / window) : 0, tokens, estimated: false }
+  }
+  const tokens = estimateHistoryTokens(history, compaction) + extraTokens
+  return { ratio: window > 0 ? Math.min(1, tokens / window) : 0, tokens, estimated: true }
+}

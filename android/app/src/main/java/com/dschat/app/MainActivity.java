@@ -447,6 +447,37 @@ public class MainActivity extends BridgeActivity {
                 }
             }
 
+            // DeepSeek 账号登录回调（OAUTH_CALLBACK_ROUTE）：
+            // 平台只接受 loopback HTTP 回调地址，所以由本地代理接住 /oauth/callback，
+            // 把 query 转给前端，然后返回一个简单的完成页。
+            if (parts.length >= 2 && parts[1].startsWith("/oauth/callback")) {
+                int q = parts[1].indexOf('?');
+                final String query = q >= 0 ? parts[1].substring(q + 1) : "";
+                WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+                if (webView != null && !query.isEmpty()) {
+                    final String jsUrl = "dschat://oauth/callback?" + query;
+                    webView.post(() -> webView.evaluateJavascript(
+                        "(function(){try{window.__DSCHAT_OAUTH_CALLBACK__ && window.__DSCHAT_OAUTH_CALLBACK__("
+                            + jsString(jsUrl) + ")}catch(e){}})()",
+                        null
+                    ));
+                }
+                byte[] page = ("<!doctype html><meta charset=utf-8><title>DSchat</title>"
+                    + "<body style=\"font-family:sans-serif;padding:32px;text-align:center\">"
+                    + "<h3>\u6388\u6743\u5b8c\u6210</h3>"
+                    + "<p>\u8bf7\u56de\u5230 DSchat\uff0c\u767b\u5f55\u4f1a\u81ea\u52a8\u7ee7\u7eed\u3002</p></body>")
+                    .getBytes(StandardCharsets.UTF_8);
+                String head = "HTTP/1.1 200 OK\r\n"
+                    + "Content-Type: text/html; charset=utf-8\r\n"
+                    + "Content-Length: " + page.length + "\r\n"
+                    + "Cache-Control: no-store\r\n"
+                    + "Connection: close\r\n\r\n";
+                out.write(head.getBytes(StandardCharsets.ISO_8859_1));
+                out.write(page);
+                out.flush();
+                return;
+            }
+
             if ("OPTIONS".equals(method)) {
                 String cors = "HTTP/1.1 204 No Content\r\n"
                     + "Access-Control-Allow-Origin: *\r\n"

@@ -40,6 +40,8 @@ export const en = {
   settingsContextUsageHint: 'Older turns are compacted near 80% so the conversation can continue',
   settingsContextUsageUnavailable: 'No conversation yet',
   settingsContextUsageEmpty: 'This chat is empty',
+  settingsContextUsageTokens: '{used} / {total} tokens',
+  settingsContextUsageEstimated: 'No server usage yet — this is estimated from text length',
   settingsAppearanceThemeLabel: 'Theme',
   settingsFontSizeLabel: 'Font size',
   settingsFontSizePreview: 'Preview text size',

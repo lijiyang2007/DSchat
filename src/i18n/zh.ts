@@ -37,6 +37,8 @@ export const zh = {
   settingsContextUsageHint: '接近 80% 会自动压缩较早内容，让对话可以一直继续',
   settingsContextUsageUnavailable: '还没有对话内容',
   settingsContextUsageEmpty: '当前对话为空',
+  settingsContextUsageTokens: '{used} / {total} tokens',
+  settingsContextUsageEstimated: '暂无服务端用量记录，这里是按字数估算的值',
   settingsAppearanceThemeLabel: '主题',
   settingsFontSizeLabel: '字体大小',
   settingsFontSizePreview: '预览文字大小',

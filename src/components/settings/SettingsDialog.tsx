@@ -25,7 +25,7 @@ import {
 import { useIsMobile } from '../../app/viewport.js'
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
 import { getVisibleMessages } from '../../services/chat/branches.js'
-import { contextUsageRatio } from '../../services/chat/compaction.js'
+import { contextUsageDetail } from '../../services/chat/compaction.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -295,6 +295,17 @@ const FONT_SIZE_LABELS = [
  * 对话里不再显示进度条，避免用户盯着百分比产生焦虑；
  * 想了解时进设置看一眼即可。
  */
+/** token 数量按千 / 百万缩写，避免一串数字挤在一起 */
+const formatTokens = (value: number): string => {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`
+  }
+  if (value >= 1000) {
+    return `${Math.round(value / 1000)}K`
+  }
+  return String(Math.round(value))
+}
+
 const ChatSettings = () => {
   const t = useTranslate()
   const activeId = useChatStore((state) => state.activeId)
@@ -308,7 +319,7 @@ const ChatSettings = () => {
   const autoCompact = useSettings((state) => state.autoCompactContext)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
 
-  // 当前对话的上下文占用；没有对话时显示占位
+  // 当前对话的上下文占用：优先用服务端真实 token，没有记录才退回估算
   const usage = (() => {
     if (!session) {
       return null
@@ -317,10 +328,10 @@ const ChatSettings = () => {
     if (history.length === 0) {
       return null
     }
-    const ratio = contextUsageRatio(history, session.compaction, model, 0, contextWindow)
-    const percent = Math.round(ratio * 100)
-    const level = ratio >= 0.8 ? 'high' : ratio >= 0.5 ? 'medium' : 'low'
-    return { percent, level }
+    const detail = contextUsageDetail(history, session.compaction, model, 0, contextWindow)
+    const percent = Math.round(detail.ratio * 100)
+    const level = detail.ratio >= 0.8 ? 'high' : detail.ratio >= 0.5 ? 'medium' : 'low'
+    return { percent, level, tokens: detail.tokens, estimated: detail.estimated }
   })()
 
   return (
@@ -332,7 +343,10 @@ const ChatSettings = () => {
               <div className={styles.contextHead}>
                 <span className={styles.contextPercent}>{usage.percent}%</span>
                 <span className={styles.contextWindow}>
-                  {t('modelSettingsContextWindowCurrent', { tokens: contextWindow })}
+                  {t('settingsContextUsageTokens', {
+                    used: formatTokens(usage.tokens),
+                    total: formatTokens(contextWindow),
+                  })}
                 </span>
               </div>
               <div className={styles.contextTrack}>
@@ -342,7 +356,11 @@ const ChatSettings = () => {
                 />
                 {autoCompact ? <div className={styles.contextThreshold} /> : null}
               </div>
-              <div className={styles.contextHint}>{t('settingsContextUsageHint')}</div>
+              <div className={styles.contextHint}>
+                {usage.estimated
+                  ? t('settingsContextUsageEstimated')
+                  : t('settingsContextUsageHint')}
+              </div>
             </>
           ) : (
             <div className={styles.contextHint}>
