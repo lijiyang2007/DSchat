@@ -29,6 +29,7 @@ import {
   setRefusalMessage,
   setSafetyCheck,
   setSendLatestReminder,
+  setShowTokenUsage,
   setStreamThrottle,
   setSystemPrompt,
   setThinkingEffort,
@@ -67,7 +68,6 @@ const thinkingEffortOptions = (t: Translate) =>
     [
       ['off', 'thinkingEffortOff'],
       ['low', 'thinkingEffortLow'],
-      ['medium', 'thinkingEffortMedium'],
       ['high', 'thinkingEffortHigh'],
       ['max', 'thinkingEffortMax'],
     ] as const
@@ -541,10 +541,18 @@ export const ModelSettings = ({
         </div>
       </div>
 
+      <ToggleCell
+        label={t('modelSettingsShowTokenUsageLabel')}
+        description={t('modelSettingsShowTokenUsageDesc')}
+        checked={settings.showTokenUsage}
+        onChange={setShowTokenUsage}
+      />
+
       <div className={styles.cell}>
         <div className={styles.field}>
           <div className={styles.label}>{t('modelSettingsThinkingEffortLabel')}</div>
           <div className={styles.description}>{t('modelSettingsThinkingEffortDesc')}</div>
+          <div className={styles.description}>{t('modelSettingsThinkingEffortHint')}</div>
           <Select
             value={settings.thinkingEffort}
             options={thinkingEffortOptions(t)}

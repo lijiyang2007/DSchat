@@ -69,7 +69,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const thinking = thinkingEffort !== 'off'
   // 点击循环切换：关闭 → 低 → 中 → 高 → 最高 → 关闭
   const nextEffort = (): ThinkingEffort => {
-    const order: ThinkingEffort[] = ['off', 'low', 'medium', 'high', 'max']
+    const order: ThinkingEffort[] = ['off', 'low', 'high', 'max']
     const index = order.indexOf(thinkingEffort)
     return order[(index + 1) % order.length]
   }
@@ -77,8 +77,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     switch (thinkingEffort) {
       case 'low':
         return t('thinkingEffortLowShort')
-      case 'medium':
-        return t('thinkingEffortMediumShort')
       case 'high':
         return t('thinkingEffortHighShort')
       case 'max':

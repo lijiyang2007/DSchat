@@ -1,0 +1,21 @@
+declare const styles: {
+  readonly page: string
+  readonly header: string
+  readonly headerSpacer: string
+  readonly back: string
+  readonly backIcon: string
+  readonly body: string
+  readonly bodyInner: string
+  readonly title: string
+  readonly subtitle: string
+  readonly content: string
+  readonly footer: string
+  readonly entry: string
+  readonly entryIcon: string
+  readonly entryText: string
+  readonly entryTitle: string
+  readonly entryDesc: string
+  readonly entryBadge: string
+  readonly entryArrow: string
+}
+export = styles

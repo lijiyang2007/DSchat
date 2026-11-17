@@ -57,6 +57,7 @@ import { useApiKeyEditor } from './ApiKeyField.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { SettingsEntry, SettingsPage } from './SettingsPage.js'
 import styles from './Settings.module.css'
 
 /**
@@ -68,101 +69,125 @@ export const SettingsDialog = () => {
   return open ? <SettingsContent /> : null
 }
 
-const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode }[] = [
+const sections: {
+  value: SettingsSection
+  label: TranslationKey
+  desc: TranslationKey
+  icon: ReactNode
+}[] = [
   {
     value: 'general',
     label: 'settingDialogAsideGeneralOptionLabel',
+    desc: 'settingEntryGeneralDesc',
     icon: <IconSettingsOutline16 />,
   },
   {
     value: 'model',
     label: 'settingDialogAsideModelOptionLabel',
+    desc: 'settingEntryModelDesc',
     icon: <IconThinkOutline16 />,
   },
   {
     value: 'memory',
     label: 'settingDialogAsideMemoryOptionLabel',
+    desc: 'settingEntryMemoryDesc',
     icon: <IconEditOutline16 />,
   },
-  { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
+  {
+    value: 'data',
+    label: 'settingDialogAsideDataOptionLabel',
+    desc: 'settingEntryDataDesc',
+    icon: <IconDataOutline16 />,
+  },
 ]
 
 const SettingsContent = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
-  // 打开时按调用方指定的分组选中，之后在弹窗内切换
-  const [section, setSection] = useState(() => useSettingsDialog.getState().section)
+  // null 表示停留在设置主页（入口列表）；否则是正在查看的子页
+  const [opened, setOpened] = useState<SettingsSection | null>(() => {
+    const state = useSettingsDialog.getState()
+    // openSettings('model') 这类带目标的调用直接进子页；从侧边栏点进来先看列表
+    return state.targeted ? state.section : null
+  })
   // 切换分组不丢失正在输入的 API Key 与导入状态
   const apiKeyEditor = useApiKeyEditor()
   const historyImport = useHistoryImport()
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
   const historyBusy = historyImport.busy || historyDelete.busy || replacingHistory
+
+  const close = () => {
+    if (!historyBusy) {
+      closeSettings()
+    }
+  }
+
+  const current = opened ? sections.find((item) => item.value === opened) : null
+
+  const renderSection = () => {
+    if (opened === 'general') {
+      return (
+        <>
+          <ThemeSetting />
+          <LocaleSetting />
+          <TtsVoiceSetting />
+          <LocationSetting />
+          <TokenLimitSetting />
+          <UpdateSetting />
+        </>
+      )
+    }
+    if (opened === 'model') {
+      return <ModelSettings apiKeyEditor={apiKeyEditor} isMobile={isMobile} />
+    }
+    if (opened === 'memory') {
+      return <MemorySettings />
+    }
+    return (
+      <>
+        <ImportHistory historyImport={historyImport} disabled={historyBusy} />
+        <ExportHistory disabled={historyBusy} />
+        <SettingCell
+          label={t('deleteAllSessions')}
+          status={null}
+          action={
+            <Button
+              variant="dangerOutlined"
+              size="m"
+              className={styles.cellButton}
+              disabled={historyBusy}
+              onClick={historyDelete.open}
+            >
+              {t('delete')}
+            </Button>
+          }
+        />
+      </>
+    )
+  }
+
   return (
     <>
-      <Modal
-        title={t('settings')}
-        closable={!historyBusy}
-        className={styles.dialog}
-        mainClassName={styles.dialogMain}
-        onClose={() => {
-          if (!historyBusy) {
-            closeSettings()
-          }
-        }}
-      >
-        <div role="tablist" className={styles.navigation}>
-          {sections.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="tab"
-              aria-selected={section === item.value}
-              className={clsx(styles.navItem, section === item.value && styles.navItemActive)}
-              onClick={() => setSection(item.value)}
-            >
-              {item.icon}
-              {t(item.label)}
-            </button>
-          ))}
-        </div>
-        <div role="tabpanel" className={styles.content}>
-          {section === 'general' ? (
-            <>
-              <ThemeSetting />
-              <LocaleSetting />
-              <TtsVoiceSetting />
-              <LocationSetting />
-              <TokenLimitSetting />
-              <UpdateSetting />
-            </>
-          ) : section === 'model' ? (
-            <ModelSettings apiKeyEditor={apiKeyEditor} isMobile={isMobile} />
-          ) : section === 'memory' ? (
-            <MemorySettings />
-          ) : (
-            <>
-              <ImportHistory historyImport={historyImport} disabled={historyBusy} />
-              <ExportHistory disabled={historyBusy} />
-              <SettingCell
-                label={t('deleteAllSessions')}
-                status={null}
-                action={
-                  <Button
-                    variant="dangerOutlined"
-                    size="m"
-                    className={styles.cellButton}
-                    disabled={historyBusy}
-                    onClick={historyDelete.open}
-                  >
-                    {t('delete')}
-                  </Button>
-                }
+      {current ? (
+        <SettingsPage title={t(current.label)} onBack={() => setOpened(null)} onClose={close}>
+          {renderSection()}
+        </SettingsPage>
+      ) : (
+        <SettingsPage title={t('settings')} subtitle={t('settingsPageSubtitle')} onClose={close}>
+          <div role="list">
+            {sections.map((item) => (
+              <SettingsEntry
+                key={item.value}
+                icon={item.icon}
+                title={t(item.label)}
+                description={t(item.desc)}
+                onClick={() => setOpened(item.value)}
               />
-            </>
-          )}
-        </div>
-      </Modal>
+            ))}
+          </div>
+        </SettingsPage>
+      )}
       {historyImport.file ? <ImportConfirm historyImport={historyImport} /> : null}
       {historyDelete.opened ? <DeleteAllConfirm historyDelete={historyDelete} /> : null}
     </>

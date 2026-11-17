@@ -8,12 +8,18 @@ export type SettingsSection = 'general' | 'model' | 'memory' | 'data'
 export const useSettingsDialog = create(() => ({
   open: false,
   section: 'general' as SettingsSection,
+  /** true 表示调用方指定了要打开的分区，直接进子页；false 表示先看入口列表 */
+  targeted: false,
 }))
 
 export const openSettings = (section: SettingsSection) =>
-  useSettingsDialog.setState({ open: true, section })
+  useSettingsDialog.setState({ open: true, section, targeted: true })
 
-export const closeSettings = () => useSettingsDialog.setState({ open: false })
+/** 从侧边栏等入口打开设置：先显示入口列表 */
+export const openSettingsHome = () =>
+  useSettingsDialog.setState({ open: true, targeted: false })
+
+export const closeSettings = () => useSettingsDialog.setState({ open: false, targeted: false })
 
 /** 没有 API Key 时打开设置并选中 API Key 所在的「模型与接口」；本地部署模式免密钥直接放行 */
 export const ensureApiKey = () => {

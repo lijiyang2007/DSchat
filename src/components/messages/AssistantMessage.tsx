@@ -50,6 +50,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const keepRefusedContent = useSettings((state) => state.keepRefusedContent)
   const allowRefusedContext = useSettings((state) => state.allowRefusedContext)
   const allowEditAssistant = useSettings((state) => state.allowEditAssistant)
+  const showTokenUsage = useSettings((state) => state.showTokenUsage)
   const refusalMessage = useSettings((state) => state.refusalMessage)
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
@@ -263,7 +264,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   </Button>
                 ) : null}
               </div>
-              {totalTokens > 0 ? (
+              {showTokenUsage && totalTokens > 0 ? (
                 <div className={styles.tokenUsage}>
                   {t('tokenUsageSummary', {
                     total: totalTokens,

@@ -17,7 +17,7 @@ import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
-import { openSettings } from '../settings/settingsDialogState.js'
+import { openSettingsHome } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import styles from './Sider.module.css'
@@ -146,7 +146,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
         </div>
       </div>
       <div className={styles.bottom}>
-        <button type="button" className={styles.settings} onClick={() => openSettings('general')}>
+        <button type="button" className={styles.settings} onClick={openSettingsHome}>
           <span className={styles.settingsIcon}>
             <IconSettingsOutline16 />
           </span>

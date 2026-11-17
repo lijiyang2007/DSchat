@@ -11,8 +11,8 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 /** 主语言模型接口协议：deepseek / openai / responses / local（本地部署免密钥） */
 export type ChatProtocol = 'deepseek' | 'openai' | 'responses' | 'local'
 
-/** 思考程度：关闭 / 低 / 中 / 高 / 最高（对应 DeepSeek 的 output_config.effort） */
-export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max'
+/** 思考程度：关闭 / 轻 / 深 / 最高（对应 DeepSeek 的 output_config.effort） */
+export type ThinkingEffort = 'off' | 'low' | 'high' | 'max'
 
 /** 模型的上下文窗口（token）：用于上下文压缩与用量展示 */
 export const CONTEXT_WINDOW_PRESETS = [
@@ -87,6 +87,8 @@ export type Settings = {
   visionSupport: VisionSupport
   /** 流式输出的节流强度 */
   streamThrottle: StreamThrottle
+  /** 是否在每条回复下显示 token 用量 */
+  showTokenUsage: boolean
   // 多能力独立渠道
   asrChannel: ServiceChannelConfig
   ttsChannel: TtsChannelConfig
@@ -138,6 +140,7 @@ const KEYS = {
   contextWindow: 'chat-demo:context-window',
   visionSupport: 'chat-demo:vision-support',
   streamThrottle: 'chat-demo:stream-throttle',
+  showTokenUsage: 'chat-demo:show-token-usage',
   asrChannel: 'chat-demo:asr-channel',
   ttsChannel: 'chat-demo:tts-channel',
   visionChannel: 'chat-demo:vision-channel',
@@ -272,11 +275,15 @@ const readTtsChannel = (key: string): TtsChannelConfig => {
 
 const initialThinkingEffort = (): ThinkingEffort => {
   const saved = read(KEYS.thinkingEffort)
-  if (saved === 'off' || saved === 'low' || saved === 'medium' || saved === 'high' || saved === 'max') {
+  // 兼容旧值：medium 归一到 high
+  if (saved === 'medium') {
+    return 'high'
+  }
+  if (saved === 'off' || saved === 'low' || saved === 'high' || saved === 'max') {
     return saved
   }
-  // 没存过时跟随旧开关：开过深度思考就用 high，否则 off
-  return read(KEYS.thinking) === 'true' ? 'high' : 'off'
+  // 默认关闭思考：普通聊天用不到，开着更慢更贵
+  return 'off'
 }
 
 const initialVisionSupport = (): VisionSupport => {
@@ -323,12 +330,10 @@ export const useSettings = create<Settings>(() => ({
   temperature: readNumber(KEYS.temperature),
   topP: readNumber(KEYS.topP),
   maxTokens: readNumber(KEYS.maxTokens),
-  contextWindow: Math.max(
-    4000,
-    Math.round(readNumber(KEYS.contextWindow) ?? 128000)
-  ),
+  contextWindow: Math.max(4000, Math.round(readNumber(KEYS.contextWindow) ?? 1000000)),
   visionSupport: initialVisionSupport(),
   streamThrottle: initialStreamThrottle(),
+  showTokenUsage: readBool(KEYS.showTokenUsage, true),
   asrChannel: readChannel(KEYS.asrChannel),
   ttsChannel: readTtsChannel(KEYS.ttsChannel),
   visionChannel: readChannel(KEYS.visionChannel),
@@ -418,6 +423,9 @@ export const setStreamThrottle = (streamThrottle: StreamThrottle) => {
   write(KEYS.streamThrottle, streamThrottle)
   useSettings.setState({ streamThrottle })
 }
+
+export const setShowTokenUsage = (value: boolean) =>
+  setBoolSetting(KEYS.showTokenUsage, 'showTokenUsage', value)
 
 export const setSearch = (search: boolean) => {
   write(KEYS.search, String(search))
@@ -560,9 +568,10 @@ export const resetModelAndPolicySettings = () => {
   setSystemPrompt(DEFAULT_SYSTEM_PROMPT)
   setAutoCompactContext(true)
   setThinkingEffort('off')
-  setContextWindow(128000)
+  setContextWindow(1000000)
   setVisionSupport('auto')
   setStreamThrottle('balanced')
+  setShowTokenUsage(true)
   setTemperature(null)
   setTopP(null)
   setMaxTokens(null)
