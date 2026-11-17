@@ -21,8 +21,9 @@ import {
 import {
   matchesRefusalKeyword,
   setSearch,
-  setThinking,
+  setThinkingEffort,
   useSettings,
+  type ThinkingEffort,
 } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
@@ -64,7 +65,28 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
-  const thinking = useSettings((state) => state.thinking)
+  const thinkingEffort = useSettings((state) => state.thinkingEffort)
+  const thinking = thinkingEffort !== 'off'
+  // 点击循环切换：关闭 → 低 → 中 → 高 → 最高 → 关闭
+  const nextEffort = (): ThinkingEffort => {
+    const order: ThinkingEffort[] = ['off', 'low', 'medium', 'high', 'max']
+    const index = order.indexOf(thinkingEffort)
+    return order[(index + 1) % order.length]
+  }
+  const effortLabel = (() => {
+    switch (thinkingEffort) {
+      case 'low':
+        return t('thinkingEffortLowShort')
+      case 'medium':
+        return t('thinkingEffortMediumShort')
+      case 'high':
+        return t('thinkingEffortHighShort')
+      case 'max':
+        return t('thinkingEffortMaxShort')
+      default:
+        return t('thinkingSwitch')
+    }
+  })()
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -232,16 +254,20 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         <div className={styles.functionRow}>
           {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
           <div ref={togglesRef} className={styles.toggles}>
-            <Tooltip content={t('deactivatedThinkTooltip')}>
+            <Tooltip content={t('thinkingEffortTooltip', { level: effortLabel })}>
               <button
                 type="button"
-                className={clsx(styles.toggle, thinking && styles.selected)}
-                aria-label={t('thinkingSwitch')}
+                className={clsx(
+                  styles.toggle,
+                  thinking && styles.selected,
+                  thinkingEffort === 'max' && styles.selectedStrong
+                )}
+                aria-label={t('thinkingEffortTooltip', { level: effortLabel })}
                 aria-pressed={thinking}
-                onClick={() => setThinking(!thinking)}
+                onClick={() => setThinkingEffort(nextEffort())}
               >
                 <IconThinkOutline14 />
-                <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+                <span className={styles.toggleLabel}>{effortLabel}</span>
               </button>
             </Tooltip>
             <Tooltip content={t('deactivatedSearchTooltip')}>

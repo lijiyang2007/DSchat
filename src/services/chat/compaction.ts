@@ -57,7 +57,11 @@ const SUMMARY_INPUT_CLIP = 900
 /** 至少要有这么多轮才值得压缩 */
 const MIN_ROUNDS_TO_COMPACT = 4
 
-export const getContextWindow = (model: string): number => {
+export const getContextWindow = (model: string, override?: number): number => {
+  // 用户显式配置过窗口时以用户为准
+  if (override && Number.isFinite(override) && override >= 4000) {
+    return override
+  }
   const id = model.trim().toLowerCase()
   const direct = CONTEXT_WINDOWS[id]
   if (direct) {
@@ -124,13 +128,16 @@ export const planCompaction = ({
   compaction,
   model,
   allowRefused,
+  contextWindow,
 }: {
   history: Message[]
   compaction: Compaction | undefined
   model: string
   allowRefused: boolean
+  /** 用户配置的上下文窗口；缺省时按模型名推断 */
+  contextWindow?: number
 }): CompactionPlan | null => {
-  const window = getContextWindow(model)
+  const window = getContextWindow(model, contextWindow)
   const trigger = window * COMPACT_TRIGGER_RATIO
   const used = estimateHistoryTokens(history, compaction, allowRefused)
   if (used < trigger) {
@@ -218,9 +225,10 @@ export const contextUsageRatio = (
   history: Message[],
   compaction: Compaction | undefined,
   model: string,
-  extraTokens = 0
+  extraTokens = 0,
+  override?: number
 ): number => {
-  const window = getContextWindow(model)
+  const window = getContextWindow(model, override)
   const used = estimateHistoryTokens(history, compaction) + extraTokens
   return window > 0 ? Math.min(1, used / window) : 0
 }

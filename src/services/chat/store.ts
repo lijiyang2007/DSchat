@@ -13,7 +13,7 @@ import { getApiOrigin } from '../api/origin.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
-import { matchesRefusalKeyword, useSettings } from '../settings.js'
+import { allowsVision, matchesRefusalKeyword, useSettings } from '../settings.js'
 import { toggleReadAloud } from '../speech/readAloud.js'
 import { recordTurnTokenUsage } from '../tokenUsage.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
@@ -1159,8 +1159,21 @@ const prepareInlineAttachments = async (
 
     if (file.isImage) {
       const dataUrl = await blobToDataUrl(blob)
-      if (settings.visionChannel.mode === 'custom' && isCurrentQuestionFile) {
-        const visionKey = settings.visionChannel.apiKey.trim() || settings.apiKey || ''
+      // 模型明确不支持看图时，即使有视觉渠道也先转成文字描述，避免接口报错
+      const modelSeesImages = allowsVision(
+        settings.visionSupport,
+        settings.model,
+        settings.chatProtocol
+      )
+      if (
+        (settings.visionChannel.mode === 'custom' || !modelSeesImages) &&
+        isCurrentQuestionFile
+      ) {
+        // 模型不支持看图且没配视觉渠道时，退回主模型做一次识别（多数多模态模型可用）
+        const visionKey =
+          settings.visionChannel.apiKey.trim() ||
+          settings.apiKey ||
+          ''
         const visionOrigin = settings.visionChannel.baseUrl.trim() || getApiOrigin()
         const visionModel = settings.visionChannel.model.trim() || settings.model
         const desc = await recognizeWithOpenAIVision({
@@ -1324,6 +1337,7 @@ const maybeCompactContext = async (
               compaction: session.compaction,
               model,
               allowRefused: settings.allowRefusedContext,
+              contextWindow: settings.contextWindow,
             })
           : null
         if (!plan) {
@@ -1449,11 +1463,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           .filter(Boolean)
           .join('\n\n')
         const tools = serverTools(initial.search ?? false, settings.readUrl)
+        // 思考程度：off 关闭；其余映射到 DeepSeek 的 output_config.effort（仅原生协议支持）
+        const effort = settings.thinkingEffort
+        const thinkingEnabled = initial.thinking || effort !== 'off'
         const requestBody: CreateMessageRequest = {
           model: initial.model ?? (settings.model.trim() || MODEL),
           ...(system ? { system } : {}),
           messages,
-          thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+          thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },
+          ...(thinkingEnabled && effort !== 'off' && settings.chatProtocol === 'deepseek'
+            ? { output_config: { effort } }
+            : {}),
           ...(settings.safetyCheck ? { safety_check: SAFETY_CHECK } : {}),
           ...(tools && tools.length > 0 ? { tools } : {}),
           ...(settings.temperature !== null ? { temperature: settings.temperature } : {}),

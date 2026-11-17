@@ -11,6 +11,17 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 /** 主语言模型接口协议：deepseek / openai / responses / local（本地部署免密钥） */
 export type ChatProtocol = 'deepseek' | 'openai' | 'responses' | 'local'
 
+/** 思考程度：关闭 / 低 / 中 / 高 / 最高（对应 DeepSeek 的 output_config.effort） */
+export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max'
+
+/** 模型的上下文窗口（token）：用于上下文压缩与用量展示 */
+export const CONTEXT_WINDOW_PRESETS = [
+  16000, 32000, 64000, 128000, 200000, 1000000,
+] as const
+
+/** 模型是否支持看图 */
+export type VisionSupport = 'auto' | 'yes' | 'no'
+
 /** 子能力渠道模式：inherit 跟随主 DeepSeek 服务，custom 使用独立的别家服务 */
 export type ServiceChannelMode = 'inherit' | 'custom'
 
@@ -50,7 +61,10 @@ export type Settings = {
   autoCheckUpdate: boolean
   tokenLimitEnabled: boolean
   dailyTokenLimit: number
+  /** 旧的布尔开关，保留用于兼容；实际请求以 thinkingEffort 为准 */
   thinking: boolean
+  /** 本轮默认的思考程度 */
+  thinkingEffort: ThinkingEffort
   search: boolean
   siderCollapsed: boolean
   // 模型与请求参数
@@ -64,6 +78,10 @@ export type Settings = {
   temperature: number | null
   topP: number | null
   maxTokens: number | null
+  /** 模型上下文窗口（token）；用于压缩阈值与用量展示 */
+  contextWindow: number
+  /** 该模型能否直接识别图片；auto 表示按模型名自动判断 */
+  visionSupport: VisionSupport
   // 多能力独立渠道
   asrChannel: ServiceChannelConfig
   ttsChannel: TtsChannelConfig
@@ -100,6 +118,7 @@ const KEYS = {
   tokenLimitEnabled: 'chat-demo:token-limit-enabled',
   dailyTokenLimit: 'chat-demo:daily-token-limit',
   thinking: 'chat-demo:thinking',
+  thinkingEffort: 'chat-demo:thinking-effort',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
   chatProtocol: 'chat-demo:chat-protocol',
@@ -111,6 +130,8 @@ const KEYS = {
   temperature: 'chat-demo:temperature',
   topP: 'chat-demo:top-p',
   maxTokens: 'chat-demo:max-tokens',
+  contextWindow: 'chat-demo:context-window',
+  visionSupport: 'chat-demo:vision-support',
   asrChannel: 'chat-demo:asr-channel',
   ttsChannel: 'chat-demo:tts-channel',
   visionChannel: 'chat-demo:vision-channel',
@@ -243,6 +264,20 @@ const readTtsChannel = (key: string): TtsChannelConfig => {
   }
 }
 
+const initialThinkingEffort = (): ThinkingEffort => {
+  const saved = read(KEYS.thinkingEffort)
+  if (saved === 'off' || saved === 'low' || saved === 'medium' || saved === 'high' || saved === 'max') {
+    return saved
+  }
+  // 没存过时跟随旧开关：开过深度思考就用 high，否则 off
+  return read(KEYS.thinking) === 'true' ? 'high' : 'off'
+}
+
+const initialVisionSupport = (): VisionSupport => {
+  const saved = read(KEYS.visionSupport)
+  return saved === 'yes' || saved === 'no' ? saved : 'auto'
+}
+
 const initialChatProtocol = (): ChatProtocol => {
   const saved = read(KEYS.chatProtocol)
   if (saved === 'openai' || saved === 'responses' || saved === 'local') {
@@ -265,6 +300,7 @@ export const useSettings = create<Settings>(() => ({
   tokenLimitEnabled: readBool(KEYS.tokenLimitEnabled, false),
   dailyTokenLimit: Math.max(1000, Math.round(readNumber(KEYS.dailyTokenLimit) ?? 100_000)),
   thinking: read(KEYS.thinking) === 'true',
+  thinkingEffort: initialThinkingEffort(),
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   chatProtocol: initialChatProtocol(),
@@ -276,6 +312,11 @@ export const useSettings = create<Settings>(() => ({
   temperature: readNumber(KEYS.temperature),
   topP: readNumber(KEYS.topP),
   maxTokens: readNumber(KEYS.maxTokens),
+  contextWindow: Math.max(
+    4000,
+    Math.round(readNumber(KEYS.contextWindow) ?? 128000)
+  ),
+  visionSupport: initialVisionSupport(),
   asrChannel: readChannel(KEYS.asrChannel),
   ttsChannel: readTtsChannel(KEYS.ttsChannel),
   visionChannel: readChannel(KEYS.visionChannel),
@@ -341,6 +382,24 @@ export const setApiKey = (apiKey: string | null) => {
 export const setThinking = (thinking: boolean) => {
   write(KEYS.thinking, String(thinking))
   useSettings.setState({ thinking })
+}
+
+export const setThinkingEffort = (thinkingEffort: ThinkingEffort) => {
+  write(KEYS.thinkingEffort, thinkingEffort)
+  // 同步旧开关，让界面上的「深度思考」按钮状态一致
+  write(KEYS.thinking, String(thinkingEffort !== 'off'))
+  useSettings.setState({ thinkingEffort, thinking: thinkingEffort !== 'off' })
+}
+
+export const setContextWindow = (value: number) => {
+  const contextWindow = Math.max(4000, Math.round(value))
+  write(KEYS.contextWindow, String(contextWindow))
+  useSettings.setState({ contextWindow })
+}
+
+export const setVisionSupport = (visionSupport: VisionSupport) => {
+  write(KEYS.visionSupport, visionSupport)
+  useSettings.setState({ visionSupport })
 }
 
 export const setSearch = (search: boolean) => {
@@ -483,6 +542,9 @@ export const resetModelAndPolicySettings = () => {
   setModel(DEFAULT_MODEL)
   setSystemPrompt(DEFAULT_SYSTEM_PROMPT)
   setAutoCompactContext(true)
+  setThinkingEffort('off')
+  setContextWindow(128000)
+  setVisionSupport('auto')
   setTemperature(null)
   setTopP(null)
   setMaxTokens(null)
@@ -506,6 +568,8 @@ export const resetModelAndPolicySettings = () => {
   setRefusalCaseSensitive(false)
   setRefusalMessage('')
 }
+
+export { allowsVision } from './vision.js'
 
 /** 按换行或中英文逗号拆分关键词，检查用户输入是否命中任一拒答关键词 */
 export const matchesRefusalKeyword = (

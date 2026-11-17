@@ -10,6 +10,7 @@ const entries = {
   title: 'src/services/chat/title.ts',
   sessionSearch: 'src/services/chat/sessionSearch.ts',
   origin: 'src/services/api/origin.ts',
+  vision: 'src/services/vision.ts',
 }
 
 const build = (name, entryFile) =>

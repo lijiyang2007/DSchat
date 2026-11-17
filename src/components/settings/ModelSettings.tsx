@@ -1,7 +1,10 @@
+import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getApiOrigin } from '../../services/api/origin.js'
 import {
+  allowsVision,
+  CONTEXT_WINDOW_PRESETS,
   DEFAULT_MODEL,
   DEFAULT_SYSTEM_PROMPT,
   resetModelAndPolicySettings,
@@ -13,6 +16,7 @@ import {
   setAsrChannel,
   setAutoTitle,
   setChatProtocol,
+  setContextWindow,
   setCustomHeaders,
   setKeepRefusedContent,
   setMaxTokens,
@@ -26,12 +30,16 @@ import {
   setSafetyCheck,
   setSendLatestReminder,
   setSystemPrompt,
+  setThinkingEffort,
+  setVisionSupport,
   setTemperature,
   setTopP,
   setTtsChannel,
   setVisionChannel,
   useSettings,
   type ChatProtocol,
+  type ThinkingEffort,
+  type VisionSupport,
 } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { Select, type SelectOption } from '../base/Select.js'
@@ -41,6 +49,36 @@ import {
   ModelFetcherInput,
 } from './ChannelConfigField.js'
 import styles from './Settings.module.css'
+
+/** 上下文窗口的人类可读形式：128000 -> 128K，1000000 -> 1M */
+const formatWindow = (tokens: number): string => {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
+  }
+  return `${Math.round(tokens / 1000)}K`
+}
+
+type Translate = (key: never, params?: Record<string, string | number>) => string
+
+const thinkingEffortOptions = (t: Translate) =>
+  (
+    [
+      ['off', 'thinkingEffortOff'],
+      ['low', 'thinkingEffortLow'],
+      ['medium', 'thinkingEffortMedium'],
+      ['high', 'thinkingEffortHigh'],
+      ['max', 'thinkingEffortMax'],
+    ] as const
+  ).map(([value, key]) => ({ value, label: t(key as never) }))
+
+const visionOptions = (t: Translate) =>
+  (
+    [
+      ['auto', 'visionSupportAuto'],
+      ['yes', 'visionSupportYes'],
+      ['no', 'visionSupportNo'],
+    ] as const
+  ).map(([value, key]) => ({ value, label: t(key as never) }))
 
 export const ToggleSwitch = ({
   checked,
@@ -476,6 +514,73 @@ export const ModelSettings = ({
             />
           </div>
           <div className={styles.description}>{t('modelSettingsParamHint')}</div>
+        </div>
+      </div>
+
+      <div className={styles.cell}>
+        <div className={styles.field}>
+          <div className={styles.label}>{t('modelSettingsThinkingEffortLabel')}</div>
+          <div className={styles.description}>{t('modelSettingsThinkingEffortDesc')}</div>
+          <Select
+            value={settings.thinkingEffort}
+            options={thinkingEffortOptions(t)}
+            ariaLabel={t('modelSettingsThinkingEffortLabel')}
+            onChange={(value) => setThinkingEffort(value as ThinkingEffort)}
+          />
+        </div>
+      </div>
+
+      <div className={styles.cell}>
+        <div className={styles.field}>
+          <div className={styles.label}>{t('modelSettingsContextWindowLabel')}</div>
+          <div className={styles.description}>{t('modelSettingsContextWindowDesc')}</div>
+          <div className={styles.presetRow}>
+            {CONTEXT_WINDOW_PRESETS.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={clsx(
+                  styles.presetPill,
+                  settings.contextWindow === size && styles.presetPillActive
+                )}
+                onClick={() => setContextWindow(size)}
+              >
+                {formatWindow(size)}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <NumberParamInput
+              label=""
+              value={settings.contextWindow}
+              placeholder="128000"
+              step="1000"
+              min={4000}
+              integer
+              onChange={(next) => setContextWindow(next ?? 128000)}
+            />
+          </div>
+          <div className={styles.description}>{t('modelSettingsContextWindowCurrent', {
+            tokens: formatWindow(settings.contextWindow),
+          })}</div>
+        </div>
+      </div>
+
+      <div className={styles.cell}>
+        <div className={styles.field}>
+          <div className={styles.label}>{t('modelSettingsVisionLabel')}</div>
+          <div className={styles.description}>{t('modelSettingsVisionDesc')}</div>
+          <Select
+            value={settings.visionSupport}
+            options={visionOptions(t)}
+            ariaLabel={t('modelSettingsVisionLabel')}
+            onChange={(value) => setVisionSupport(value as VisionSupport)}
+          />
+          <div className={styles.description}>
+            {allowsVision(settings.visionSupport, settings.model, settings.chatProtocol)
+              ? t('modelSettingsVisionResolvedYes', { model: settings.model })
+              : t('modelSettingsVisionResolvedNo', { model: settings.model })}
+          </div>
         </div>
       </div>
 

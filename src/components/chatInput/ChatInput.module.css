@@ -444,3 +444,9 @@
     cursor: not-allowed;
   }
 }
+
+/* 思考程度最高时用更实的品牌色，和普通开启状态区分开 */
+.selectedStrong {
+  background-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-inverse, #fff);
+}

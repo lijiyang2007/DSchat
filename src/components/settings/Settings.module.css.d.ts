@@ -55,6 +55,7 @@ declare const styles: {
   readonly channelBody: string
   readonly presetRow: string
   readonly presetPill: string
+  readonly presetPillActive: string
   readonly error: string
   readonly apiKey: string
   readonly apiKeySaved: string
