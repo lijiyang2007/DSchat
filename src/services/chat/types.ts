@@ -131,12 +131,20 @@ export type Session = {
   compaction?: SessionCompaction
   /** 置顶：列表里始终排在前面 */
   pinned?: boolean
+  /** 归档：从对话历史移出，放进「归档」页；恢复后回到历史列表 */
+  archived?: boolean
+  /** 归档时间，用于归档页按归档先后排序 */
+  archivedAt?: number
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */
 export type SessionSummary = Pick<Session, 'id' | 'title' | 'createdAt' | 'updatedAt'> & {
   /** 置顶标记，跟随会话一起持久化 */
   pinned?: boolean
+  /** 归档标记，跟随会话一起持久化 */
+  archived?: boolean
+  /** 归档时间 */
+  archivedAt?: number
 }
 
 /** 显式提取字段，避免将完整会话的消息带进列表。 */
@@ -146,4 +154,6 @@ export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
   createdAt: session.createdAt,
   updatedAt: session.updatedAt,
   ...(session.pinned ? { pinned: true } : {}),
+  ...(session.archived ? { archived: true } : {}),
+  ...(session.archivedAt ? { archivedAt: session.archivedAt } : {}),
 })

@@ -41,21 +41,74 @@ export const withMirrors = (
   mirrors: readonly string[] = DOWNLOAD_MIRRORS
 ): string[] => [...mirrors.map((prefix) => `${prefix}${url}`), url]
 
-/** 依次尝试候选地址，返回第一个成功的结果 */
-const fetchFirstAvailable = async <T>(
+/**
+ * 并发尝试候选地址，取第一个成功的。
+ *
+ * 以前是串行 `for` 循环：每个镜像不通要空等满 5 秒才换下一个，
+ * 三个镜像 + jsDelivr 兜底最坏能拖到 20 秒以上，所以「有时快有时慢」——
+ * 取决于排在前面的镜像当时通不通。改成并发竞速后，
+ * 耗时只取决于最快的那一个，结果稳定。
+ */
+const fetchFastest = async <T>(
   urls: string[],
   run: (url: string) => Promise<T>
-): Promise<T> => {
-  let lastError: unknown = null
-  for (const url of urls) {
-    try {
-      return await run(url)
-    } catch (error) {
-      lastError = error
-    }
+): Promise<{ value: T; url: string }> => {
+  if (urls.length === 0) {
+    throw new Error('No update endpoints')
   }
-  throw lastError ?? new Error('All update endpoints failed')
+  return new Promise((resolve, reject) => {
+    let pending = urls.length
+    let settled = false
+    for (const url of urls) {
+      void run(url).then(
+        (value) => {
+          if (!settled) {
+            settled = true
+            resolve({ value, url })
+          }
+        },
+        () => {
+          pending -= 1
+          if (pending === 0 && !settled) {
+            reject(new Error('All update endpoints failed'))
+          }
+        }
+      )
+    }
+  })
 }
+
+/**
+ * 上次成功的镜像。下次优先用它，正常情况下第一次请求就命中，
+ * 不用再等竞速，进一步把常见路径压到一次往返。
+ */
+const PREFERRED_MIRROR_KEY = 'chat-demo:update-mirror'
+
+const readPreferredMirror = (): string => {
+  try {
+    return localStorage.getItem(PREFERRED_MIRROR_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+const writePreferredMirror = (url: string) => {
+  try {
+    localStorage.setItem(PREFERRED_MIRROR_KEY, url)
+  } catch {
+    // 忽略本地存储失败
+  }
+}
+
+/** 把上次命中的地址排到最前面，其余保持原顺序 */
+const withPreferredFirst = (urls: string[]): string[] => {
+  const preferred = readPreferredMirror()
+  if (!preferred || !urls.includes(preferred)) {
+    return urls
+  }
+  return [preferred, ...urls.filter((url) => url !== preferred)]
+}
+
 const SKIPPED_VERSION_KEY = 'chat-demo:skipped-update-version'
 
 export type ReleaseInfo = {
@@ -93,6 +146,10 @@ type AndroidUpdaterBridge = {
   getUpdateDownloadState?: () => string
   retryInstallDownloadedApk?: () => void
   cancelUpdateDownload?: () => void
+  /** 已经下好就直接装，不再重下 */
+  installDownloadedApk?: () => boolean
+  /** 丢掉已下载的包 */
+  discardDownloadedApk?: () => void
 }
 
 const getAndroidBridge = (): AndroidUpdaterBridge | null => {
@@ -360,9 +417,9 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
   useUpdater.setState({ checking: true, error: null })
 
   try {
-    // 每个候选地址单独限时：镜像被墙时能尽快换下一个，而不是整体超时
-    const response = await fetchFirstAvailable(
-      withMirrors(RELEASES_LIST_API, API_MIRRORS),
+    // 并发竞速：耗时取决于最快的那条路，不再被前面不通的镜像拖成十几秒
+    const { value: response, url: hitUrl } = await fetchFastest(
+      withPreferredFirst(withMirrors(RELEASES_LIST_API, API_MIRRORS)),
       async (url) => {
         const controller = new AbortController()
         const timeout = window.setTimeout(() => controller.abort(), 5000)
@@ -381,6 +438,8 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
         }
       }
     )
+    // 记住这次命中的镜像，下次优先用它
+    writePreferredMirror(hitUrl)
 
     if (response.status === 404) {
       useUpdater.setState({
@@ -487,11 +546,24 @@ export const startUpdateInstall = () => {
   const bridge = getAndroidBridge()
   if (current.isAndroid && latest.apkUrl && bridge?.downloadAndInstallApk) {
     writeSkippedVersion('')
-    bridge.downloadAndInstallApk(
-      latest.apkUrl,
-      latest.apkName ?? `DSchat-v${latest.version}.apk`,
-      JSON.stringify(withMirrors(latest.apkUrl).slice(1))
-    )
+    const wantedName = latest.apkName ?? `DSchat-v${latest.version}.apk`
+    // 退出应用再进来时，包可能已经下好在缓存里：直接装，别重复下载
+    if (bridge.installDownloadedApk) {
+      try {
+        const state = bridge.getUpdateDownloadState
+          ? (JSON.parse(bridge.getUpdateDownloadState()) as { hasDownloadedFile?: boolean; apkName?: string })
+          : null
+        if (state?.hasDownloadedFile && (!state.apkName || state.apkName === wantedName)) {
+          if (bridge.installDownloadedApk()) {
+            syncAndroidDownloadState()
+            return
+          }
+        }
+      } catch {
+        // 读状态失败就正常走下载
+      }
+    }
+    bridge.downloadAndInstallApk(latest.apkUrl, wantedName, JSON.stringify(withMirrors(latest.apkUrl)))
     syncAndroidDownloadState()
     stopPollingDownload()
     pollTimer = window.setInterval(syncAndroidDownloadState, 250)
@@ -522,4 +594,38 @@ export const retryPendingAndroidInstall = () => {
     bridge.retryInstallDownloadedApk()
     window.setTimeout(syncAndroidDownloadState, 300)
   }
+}
+
+/**
+ * 已经下好就直接装。退出应用再进来时缓存里的包还在，
+ * 走这里就不用重新下一遍。
+ * @returns 是否已触发安装
+ */
+export const installDownloadedApk = (): boolean => {
+  const bridge = getAndroidBridge()
+  if (!bridge?.installDownloadedApk) {
+    return false
+  }
+  try {
+    const ok = bridge.installDownloadedApk()
+    if (ok) {
+      window.setTimeout(syncAndroidDownloadState, 300)
+    }
+    return Boolean(ok)
+  } catch {
+    return false
+  }
+}
+
+/** 丢掉已下载的安装包（包损坏或想重下时用），并复位状态 */
+export const discardDownloadedApk = () => {
+  stopPollingDownload()
+  const bridge = getAndroidBridge()
+  try {
+    bridge?.discardDownloadedApk?.()
+  } catch {
+    // 原生层没有这个方法时只复位前端状态
+  }
+  useUpdater.setState({ download: EMPTY_DOWNLOAD })
+  window.setTimeout(syncAndroidDownloadState, 200)
 }

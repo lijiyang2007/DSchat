@@ -24,8 +24,6 @@ import {
 } from '../../services/chat/backup.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
-import { getVisibleMessages } from '../../services/chat/branches.js'
-import { contextUsageDetail } from '../../services/chat/compaction.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -67,6 +65,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { useApiKeyEditor } from './ApiKeyField.js'
+import { ContextUsage } from './ContextUsage.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
 import {
@@ -321,89 +320,18 @@ const FONT_SIZE_LABELS = [
 ] as const
 
 /**
- * 外观子页：主题三选一 + 字体大小滑块（实时预览）+ 个性化开关。
- * 字体大小直接改根元素的 --ds-font-scale，改完立刻生效。
+ * 对话设置：上下文用量 + 自动压缩 + 每轮 token 用量开关。
+ * 对话里不再显示进度条，避免用户盯着百分比产生焦虑；想了解时看一眼即可。
  */
-/**
- * 对话设置：把上下文用量从对话页挪到这里。
- * 对话里不再显示进度条，避免用户盯着百分比产生焦虑；
- * 想了解时进设置看一眼即可。
- */
-/** token 数量按千 / 百万缩写，避免一串数字挤在一起 */
-const formatTokens = (value: number): string => {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1000) {
-    return `${Math.round(value / 1000)}K`
-  }
-  return String(Math.round(value))
-}
-
 const ChatSettings = () => {
   const t = useTranslate()
-  const activeId = useChatStore((state) => state.activeId)
-  const session = useChatStore((state) =>
-    state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
-      ? state.sessionCache[state.activeId]
-      : undefined
-  )
-  const model = useSettings((state) => state.model)
-  const contextWindow = useSettings((state) => state.contextWindow)
   const autoCompact = useSettings((state) => state.autoCompactContext)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
-
-  // 当前对话的上下文占用：优先用服务端真实 token，没有记录才退回估算
-  const usage = (() => {
-    if (!session) {
-      return null
-    }
-    const history = getVisibleMessages(session)
-    if (history.length === 0) {
-      return null
-    }
-    const detail = contextUsageDetail(history, session.compaction, model, 0, contextWindow)
-    const percent = Math.round(detail.ratio * 100)
-    const level = detail.ratio >= 0.8 ? 'high' : detail.ratio >= 0.5 ? 'medium' : 'low'
-    return { percent, level, tokens: detail.tokens, estimated: detail.estimated }
-  })()
 
   return (
     <>
       <SettingsGroup label={t('settingsContextUsageTitle')}>
-        <div className={styles.contextCell}>
-          {usage ? (
-            <>
-              <div className={styles.contextHead}>
-                <span className={styles.contextPercent}>{usage.percent}%</span>
-                <span className={styles.contextWindow}>
-                  {t('settingsContextUsageTokens', {
-                    used: formatTokens(usage.tokens),
-                    total: formatTokens(contextWindow),
-                  })}
-                </span>
-              </div>
-              <div className={styles.contextTrack}>
-                <div
-                  className={clsx(styles.contextFill, styles[`contextFill_${usage.level}`])}
-                  style={{ width: `${Math.min(100, usage.percent)}%` }}
-                />
-                {autoCompact ? <div className={styles.contextThreshold} /> : null}
-              </div>
-              <div className={styles.contextHint}>
-                {usage.estimated
-                  ? t('settingsContextUsageEstimated')
-                  : t('settingsContextUsageHint')}
-              </div>
-            </>
-          ) : (
-            <div className={styles.contextHint}>
-              {activeId === null
-                ? t('settingsContextUsageUnavailable')
-                : t('settingsContextUsageEmpty')}
-            </div>
-          )}
-        </div>
+        <ContextUsage />
       </SettingsGroup>
 
       <SettingsGroup label={t('settingsPersonalizeLabel')}>

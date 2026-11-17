@@ -6,6 +6,11 @@ declare const styles: {
   readonly "searchClear": string;
   readonly "newChat": string;
   readonly "newChatIcon": string;
+  readonly "archiveEntry": string;
+  readonly "archiveEntryActive": string;
+  readonly "archiveEntryIcon": string;
+  readonly "archiveEntryLabel": string;
+  readonly "archiveEntryCount": string;
   readonly "listWrap": string;
   readonly "list": string;
   readonly "section": string;

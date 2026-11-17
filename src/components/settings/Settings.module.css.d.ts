@@ -42,17 +42,6 @@ declare const styles: {
   readonly fontSizeMark: string
   readonly fontSizeMarkActive: string
   readonly accountHint: string
-  readonly contextCell: string
-  readonly contextHead: string
-  readonly contextPercent: string
-  readonly contextWindow: string
-  readonly contextTrack: string
-  readonly contextFill: string
-  readonly contextFill_low: string
-  readonly contextFill_medium: string
-  readonly contextFill_high: string
-  readonly contextThreshold: string
-  readonly contextHint: string
   readonly resetRow: string
   readonly memoryAddRow: string
   readonly memoryAddInput: string

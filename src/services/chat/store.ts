@@ -134,7 +134,9 @@ const sameSummary = (a: SessionSummary, b: SessionSummary) =>
   a.title === b.title &&
   a.createdAt === b.createdAt &&
   a.updatedAt === b.updatedAt &&
-  Boolean(a.pinned) === Boolean(b.pinned)
+  Boolean(a.pinned) === Boolean(b.pinned) &&
+  Boolean(a.archived) === Boolean(b.archived) &&
+  (a.archivedAt ?? 0) === (b.archivedAt ?? 0)
 
 const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
@@ -531,6 +533,41 @@ export const setSessionPinned = (id: string, pinned: boolean) => {
     persist(id)
   } else {
     void db.updateSessionMeta(id, { pinned })
+  }
+}
+
+/**
+ * 归档 / 取消归档。
+ * 归档只是打标记：会话仍留在本地存储里，随时可以从归档页拉回对话历史。
+ * 归档时顺带取消置顶，避免恢复后跑到列表最前面。
+ */
+export const setSessionArchived = (id: string, archived: boolean) => {
+  const archivedAt = archived ? Date.now() : 0
+  // archivedAt 用 0 清掉而不是留旧值：恢复后再归档要拿到新的归档时间，
+  // 否则归档页会按上一次的旧时间排序。
+  const patch = {
+    archived,
+    archivedAt,
+    ...(archived ? { pinned: false } : {}),
+  }
+  set((state) => {
+    const session = Object.hasOwn(state.sessionCache, id) ? state.sessionCache[id] : undefined
+    return {
+      ...(session ? { sessionCache: { ...state.sessionCache, [id]: { ...session, ...patch } } } : {}),
+      sessions: sortSessions(
+        state.sessions.map((summary) => (summary.id === id ? { ...summary, ...patch } : summary))
+      ),
+      // 归档的是当前打开的会话：退回欢迎页，不然会停在归档里的对话上
+      ...(archived && state.activeId === id ? { activeId: null } : {}),
+    }
+  })
+  const session = getSession(id)
+  if (session) {
+    persist(id)
+  } else {
+    void db
+      .updateSessionMeta(id, patch)
+      .catch(db.reportStorageError('archive session'))
   }
 }
 

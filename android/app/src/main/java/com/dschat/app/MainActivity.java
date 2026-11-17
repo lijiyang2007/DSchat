@@ -64,6 +64,72 @@ public class MainActivity extends BridgeActivity {
     /** 取消标记：前端点「取消下载」时置位，下载线程每轮检查后中止 */
     private volatile boolean updateCancelled = false;
     private volatile Thread downloadThread = null;
+    /** 缓存目录里已有的完整安装包是否已经扫过盘（进程重启后要认回来，避免重复下载） */
+    private volatile boolean restoredDownload = false;
+    /** 已下载完成、等待安装的包名，供前端判断能否直接安装 */
+    private volatile String downloadedApkName = "";
+
+    /**
+     * 进程被杀掉再进来时，内存里的 downloadedApkFile 会丢，
+     * 但缓存目录里的安装包还在。这里把它认回来，前端就不会又下一次。
+     */
+    private void restoreDownloadedApkIfNeeded() {
+        if (restoredDownload) {
+            return;
+        }
+        restoredDownload = true;
+        try {
+            File updateDir = new File(getCacheDir(), "updates");
+            if (!updateDir.exists()) {
+                return;
+            }
+            File[] files = updateDir.listFiles();
+            if (files == null) {
+                return;
+            }
+            File newest = null;
+            for (File file : files) {
+                if (!file.isFile() || !file.getName().toLowerCase(Locale.US).endsWith(".apk")) {
+                    continue;
+                }
+                // 空文件或明显不完整的不算
+                if (file.length() < 1024 * 1024) {
+                    continue;
+                }
+                if (newest == null || file.lastModified() > newest.lastModified()) {
+                    newest = file;
+                }
+            }
+            if (newest != null) {
+                downloadedApkFile = newest;
+                downloadedApkName = newest.getName();
+                updateStatus = "idle";
+                updateProgress = 100;
+                updateDownloaded = newest.length();
+                updateTotal = newest.length();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 清掉缓存目录里所有安装包（装完或用户明确不要了） */
+    private void clearDownloadedApks() {
+        try {
+            File updateDir = new File(getCacheDir(), "updates");
+            File[] files = updateDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    // 保留 .part，那是没下完的，还能续传
+                    if (file.isFile() && file.getName().toLowerCase(Locale.US).endsWith(".apk")) {
+                        file.delete();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        downloadedApkFile = null;
+        downloadedApkName = "";
+    }
 
     public class ProxyBridge {
         @JavascriptInterface
@@ -96,30 +162,44 @@ public class MainActivity extends BridgeActivity {
                 updateError = "Invalid APK URL";
                 return;
             }
-            updateCancelled = false;
-            updateStatus = "downloading";
-            updateProgress = 0;
-            updateDownloaded = 0;
-            updateTotal = 0;
-            updateError = "";
-            downloadedApkFile = null;
 
             final String safeName = (fileName != null && !fileName.trim().isEmpty())
                 ? fileName.replaceAll("[^a-zA-Z0-9._-]", "_")
                 : "DSchat-update.apk";
 
-            updateCancelled = false;
-            downloadThread = new Thread(() -> {
-                File updateDir = new File(getCacheDir(), "updates");
-                if (!updateDir.exists()) {
-                    updateDir.mkdirs();
-                }
-                File tempFile = new File(updateDir, safeName + ".part");
-                File finalFile = new File(updateDir, safeName);
+            File updateDir = new File(getCacheDir(), "updates");
+            if (!updateDir.exists()) {
+                updateDir.mkdirs();
+            }
+            final File tempFile = new File(updateDir, safeName + ".part");
+            final File finalFile = new File(updateDir, safeName);
 
-                // 直连失败时依次换镜像：国内网络直连 release-assets 常被阻断
+            // 已经下好了同一个包：直接装，不再重下（退出应用再进来会走到这里）
+            restoreDownloadedApkIfNeeded();
+            if (finalFile.exists() && finalFile.length() > 1024 * 1024) {
+                downloadedApkFile = finalFile;
+                downloadedApkName = safeName;
+                updateStatus = "idle";
+                updateProgress = 100;
+                updateDownloaded = finalFile.length();
+                updateTotal = finalFile.length();
+                updateError = "";
+                runOnUiThread(() -> triggerApkInstall(finalFile));
+                return;
+            }
+
+            updateCancelled = false;
+            updateStatus = "downloading";
+            updateProgress = 0;
+            updateDownloaded = tempFile.exists() ? tempFile.length() : 0;
+            updateTotal = 0;
+            updateError = "";
+            downloadedApkFile = null;
+
+            downloadThread = new Thread(() -> {
+                // 直连失败时依次换镜像：国内网络直连 release-assets 常被阻断。
+                // 直连放最后，镜像优先，这样国内不会先卡在必然失败的直连上。
                 List<String> candidates = new ArrayList<>();
-                candidates.add(apkUrl);
                 if (mirrorsJson != null && !mirrorsJson.isEmpty()) {
                     try {
                         JSONArray array = new JSONArray(mirrorsJson);
@@ -132,9 +212,13 @@ public class MainActivity extends BridgeActivity {
                     } catch (Exception ignored) {
                     }
                 }
+                candidates.add(apkUrl);
 
                 String lastError = "";
                 for (String candidate : candidates) {
+                    if (updateCancelled) {
+                        break;
+                    }
                     HttpURLConnection conn = null;
                     try {
                         URL currentUrl = new URL(candidate);
@@ -142,9 +226,15 @@ public class MainActivity extends BridgeActivity {
                         while (true) {
                             conn = (HttpURLConnection) currentUrl.openConnection();
                             conn.setInstanceFollowRedirects(false);
-                            conn.setConnectTimeout(15000);
-                            conn.setReadTimeout(60000);
+                            // 连接超时压短：镜像不通时尽快换下一个，而不是干等
+                            conn.setConnectTimeout(6000);
+                            conn.setReadTimeout(30000);
                             conn.setRequestProperty("User-Agent", "DSchat-Android");
+                            // 断点续传：有残留 .part 就接着要
+                            long existing = tempFile.exists() ? tempFile.length() : 0;
+                            if (existing > 0) {
+                                conn.setRequestProperty("Range", "bytes=" + existing + "-");
+                            }
                             int code = conn.getResponseCode();
                             if (code >= 300 && code < 400 && redirects < 8) {
                                 String loc = conn.getHeaderField("Location");
@@ -156,27 +246,40 @@ public class MainActivity extends BridgeActivity {
                                 redirects++;
                                 continue;
                             }
+                            if (code == 416) {
+                                // 残留比远端还长，说明这个 .part 是坏的，重头来
+                                if (tempFile.exists()) {
+                                    tempFile.delete();
+                                }
+                                conn.disconnect();
+                                throw new IOException("HTTP 416");
+                            }
                             if (code < 200 || code >= 300) {
                                 throw new IOException("HTTP " + code);
                             }
                             break;
                         }
 
+                        boolean resumed = tempFile.exists() && tempFile.length() > 0;
+                        long existing = resumed ? tempFile.length() : 0;
                         long total = conn.getContentLengthLong();
-                        updateTotal = Math.max(0, total);
+                        updateTotal = total > 0 ? total + existing : 0;
                         try (
                             InputStream in = new BufferedInputStream(conn.getInputStream());
-                            FileOutputStream fileOut = new FileOutputStream(tempFile)
+                            FileOutputStream fileOut = new FileOutputStream(tempFile, resumed)
                         ) {
                             byte[] buf = new byte[16384];
-                            long downloaded = 0;
+                            long downloaded = existing;
                             int n;
                             while ((n = in.read(buf)) != -1) {
+                                if (updateCancelled) {
+                                    throw new IOException("cancelled");
+                                }
                                 fileOut.write(buf, 0, n);
                                 downloaded += n;
                                 updateDownloaded = downloaded;
-                                if (total > 0) {
-                                    updateProgress = (int) Math.min(100, (downloaded * 100L) / total);
+                                if (updateTotal > 0) {
+                                    updateProgress = (int) Math.min(100, (downloaded * 100L) / updateTotal);
                                 }
                             }
                             fileOut.flush();
@@ -188,6 +291,7 @@ public class MainActivity extends BridgeActivity {
                             throw new IOException("Failed to prepare APK file");
                         }
                         downloadedApkFile = finalFile;
+                        downloadedApkName = safeName;
                         updateProgress = 100;
                         updateStatus = "downloading";
                         runOnUiThread(() -> triggerApkInstall(finalFile));
@@ -198,11 +302,11 @@ public class MainActivity extends BridgeActivity {
                             break;
                         }
                         lastError = e.getMessage() != null ? e.getMessage() : "Download failed";
-                        updateDownloaded = 0;
-                        updateProgress = 0;
-                        if (tempFile.exists()) {
+                        // 保留 .part 以便换镜像后续传；只有内容确实不可用才清掉
+                        if (tempFile.exists() && tempFile.length() == 0) {
                             tempFile.delete();
                         }
+                        updateProgress = 0;
                     } finally {
                         if (conn != null) {
                             conn.disconnect();
@@ -223,13 +327,53 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public String getUpdateDownloadState() {
+            restoreDownloadedApkIfNeeded();
             return "{\"status\":\"" + escapeJson(updateStatus) + "\""
                 + ",\"progress\":" + updateProgress
                 + ",\"downloaded\":" + updateDownloaded
                 + ",\"total\":" + updateTotal
                 + ",\"error\":\"" + escapeJson(updateError) + "\""
+                + ",\"apkName\":\"" + escapeJson(downloadedApkName) + "\""
                 + ",\"hasDownloadedFile\":" + (downloadedApkFile != null && downloadedApkFile.exists())
                 + "}";
+        }
+
+        /** 已经下好、直接装（不再重下） */
+        @JavascriptInterface
+        public boolean installDownloadedApk() {
+            restoreDownloadedApkIfNeeded();
+            final File file = downloadedApkFile;
+            if (file == null || !file.exists()) {
+                return false;
+            }
+            runOnUiThread(() -> triggerApkInstall(file));
+            return true;
+        }
+
+        /** 丢掉已下载的包，下次重新下（安装包损坏时用） */
+        @JavascriptInterface
+        public void discardDownloadedApk() {
+            updateCancelled = true;
+            Thread t = downloadThread;
+            if (t != null) {
+                t.interrupt();
+            }
+            File updateDir = new File(getCacheDir(), "updates");
+            File[] files = updateDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile()) {
+                        file.delete();
+                    }
+                }
+            }
+            downloadedApkFile = null;
+            downloadedApkName = "";
+            updateStatus = "idle";
+            updateProgress = 0;
+            updateDownloaded = 0;
+            updateTotal = 0;
+            updateError = "";
         }
 
         @JavascriptInterface

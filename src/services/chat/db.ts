@@ -125,10 +125,10 @@ export const renameSession = async (id: string, title: string): Promise<void> =>
   ])
 }
 
-/** 未打开的会话也能改元数据（置顶等），只读写该条记录。 */
+/** 未打开的会话也能改元数据（置顶、归档等），只读写该条记录。 */
 export const updateSessionMeta = async (
   id: string,
-  meta: { pinned?: boolean }
+  meta: { pinned?: boolean; archived?: boolean; archivedAt?: number }
 ): Promise<void> => {
   const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')
   await Promise.all([

@@ -1,8 +1,10 @@
 import { useTranslate } from '../../i18n/index.js'
 import {
   cancelUpdateDownload,
+  discardDownloadedApk,
   dismissUpdateModal,
   getCurrentAppVersion,
+  installDownloadedApk,
   openReleaseInBrowser,
   retryPendingAndroidInstall,
   skipReleaseVersion,
@@ -35,6 +37,8 @@ export const UpdateModal = () => {
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(latest.publishedAt))
     : ''
   const downloading = download.status === 'downloading'
+  // 缓存里已经有下好的包：直接装，不再重下
+  const readyToInstall = !downloading && download.hasDownloadedFile
   const canInstallInApp = current.isAndroid && Boolean(latest.apkUrl)
 
   return (
@@ -68,9 +72,13 @@ export const UpdateModal = () => {
                 variant="primary"
                 size="m"
                 disabled={downloading}
-                onClick={startUpdateInstall}
+                onClick={readyToInstall ? () => installDownloadedApk() : startUpdateInstall}
               >
-                {canInstallInApp ? t('updateActionInstall') : t('updateActionOpenRelease')}
+                {!canInstallInApp
+                  ? t('updateActionOpenRelease')
+                  : readyToInstall
+                    ? t('updateActionInstallDownloaded')
+                    : t('updateActionInstall')}
               </Button>
             ) : (
               <Button
@@ -162,6 +170,25 @@ export const UpdateModal = () => {
               onClick={() => openReleaseInBrowser(latest.apkUrl ?? latest.htmlUrl)}
             >
               {t('updateOpenInBrowser')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 包已经下好、当前没在下载：提示不必重下，直接安装即可 */}
+      {download.status === 'idle' && readyToInstall ? (
+        <div className={styles.progressBox}>
+          <div className={styles.progressText}>{t('updateDownloadedReady')}</div>
+          <div className={styles.inlineActions}>
+            <button
+              type="button"
+              className={styles.linkButton}
+              onClick={() => installDownloadedApk()}
+            >
+              {t('updateActionInstallDownloaded')}
+            </button>
+            <button type="button" className={styles.linkButton} onClick={discardDownloadedApk}>
+              {t('updateActionRedownload')}
             </button>
           </div>
         </div>

@@ -733,3 +733,21 @@ export const IconVolumeOffOutline20 = () => (
     <path d="M2.6 2.8L17.4 17.6" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
   </svg>
 )
+
+export const IconArchiveOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2.2 4.3C2.2 3.8 2.6 3.4 3.1 3.4H12.9C13.4 3.4 13.8 3.8 13.8 4.3V5.2C13.8 5.7 13.4 6.1 12.9 6.1H3.1C2.6 6.1 2.2 5.7 2.2 5.2V4.3Z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 6.1V11.9C3 12.5 3.5 13 4.1 13H11.9C12.5 13 13 12.5 13 11.9V6.1"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+    <path d="M6.4 8.4H9.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)

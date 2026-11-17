@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
+  IconArchiveOutline16,
   IconCheckOutline16,
   IconChevronDownOutline14,
   IconChevronRightOutline14,
@@ -22,6 +23,7 @@ import { Menu } from '../base/Menu.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { openSettingsHome } from '../settings/settingsDialogState.js'
+import { ArchivePanel } from './ArchivePanel.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import {
@@ -52,12 +54,22 @@ const maskAccount = (apiKey: string | null): string => {
  */
 export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const t = useTranslate()
-  const sessions = useChatStore((state) => state.sessions)
+  const allSessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
   const apiKey = useSettings((state) => state.apiKey)
   const sort = useSessionSort((state) => state.sort)
   const collapsedKeys = useCollapsedGroups((state) => state.keys)
   const [now, setNow] = useState(Date.now)
+  // 对话历史只显示未归档的；归档的在归档页里
+  const sessions = useMemo(
+    () => allSessions.filter((session) => !session.archived),
+    [allSessions]
+  )
+  const archivedCount = useMemo(
+    () => allSessions.reduce((count, session) => (session.archived ? count + 1 : count), 0),
+    [allSessions]
+  )
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const ordered = useMemo(() => sortSessions(sessions, sort), [sessions, sort])
   // 只有按更新时间排时才按日期分组；换成标题/创建时间后日期不再单调，分组会碎成好几段
   const groups = useMemo(
@@ -150,9 +162,34 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
         </span>
         {t('newChat')}
       </button>
+      {/* 归档入口：有归档内容时显示，点进去可以把对话拉回历史 */}
+      {archivedCount > 0 ? (
+        <button
+          type="button"
+          className={clsx(styles.archiveEntry, archiveOpen && styles.archiveEntryActive)}
+          aria-expanded={archiveOpen}
+          onClick={() => setArchiveOpen((value) => !value)}
+        >
+          <span className={styles.archiveEntryIcon}>
+            <IconArchiveOutline16 />
+          </span>
+          <span className={styles.archiveEntryLabel}>{t('archiveEntryLabel')}</span>
+          <span className={styles.archiveEntryCount}>{archivedCount}</span>
+        </button>
+      ) : null}
       <div className={styles.listWrap}>
         <div className={styles.list}>
-          {filtered ? (
+          {archiveOpen ? (
+            <ArchivePanel
+              onDelete={(id) => {
+                const target = allSessions.find((session) => session.id === id)
+                if (target) {
+                  setDeleting(target)
+                }
+              }}
+              onClose={() => setArchiveOpen(false)}
+            />
+          ) : filtered ? (
             filtered.length > 0 ? (
               filtered.map((session) => (
                 <SessionItem
