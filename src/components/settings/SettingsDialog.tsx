@@ -80,13 +80,47 @@ import { SettingsEntry, SettingsGroup, SettingsPage } from './SettingsPage.js'
 import styles from './Settings.module.css'
 
 /**
- * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）与「数据管理」（API Key、导入、导出、删除）。
- * 桌面端为居中弹窗、左侧导航；移动端为底部弹层、导航横排在内容上方
+ * 设置弹窗：全屏设置页。打开时整页淡入上浮，关闭时淡出下浮；
+ * 主页与子页之间是同一个页面实例，只有内容层做左右滑动，不会整页重播入场动画。
  */
 export const SettingsDialog = () => {
   const open = useSettingsDialog((state) => state.open)
-  return open ? <SettingsContent /> : null
+  const [mounted, setMounted] = useState(open)
+  const [closing, setClosing] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      setClosing(false)
+      return
+    }
+    if (!mounted) {
+      return
+    }
+    // 关闭时先播退场动画再卸载；用户关掉动效时直接卸载
+    if (prefersReducedMotion()) {
+      setMounted(false)
+      setClosing(false)
+      return
+    }
+    setClosing(true)
+    const timer = setTimeout(() => {
+      setMounted(false)
+      setClosing(false)
+    }, SETTINGS_PAGE_EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [open, mounted])
+
+  return mounted ? <SettingsContent closing={closing} /> : null
 }
+
+/** 退场动画时长，与 SettingsPage.module.css 里的 settingsPageExit 保持一致 */
+const SETTINGS_PAGE_EXIT_MS = 180
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const sections: {
   value: SettingsSection
@@ -511,11 +545,20 @@ const AppearanceSettings = () => {
   )
 }
 
-const SettingsContent = () => {
+const SettingsContent = ({ closing }: { closing: boolean }) => {
   const t = useTranslate()
   const isMobile = useIsMobile()
   // 当前子页由 store 保存，返回键与 Esc 才能逐级返回
   const opened = useSettingsDialog((state) => state.page)
+  // 记录切换方向：进子页从右侧滑入，返回主页从左侧滑入。
+  // 用上一次的 page 推导，安卓返回键走 store 也能拿到正确方向。
+  // 在渲染期间直接纠正（React 允许的自纠正写法），保证首次提交就带上正确方向，不会先播错再纠正。
+  const previousPage = useRef(opened)
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward')
+  if (previousPage.current !== opened) {
+    previousPage.current = opened
+    setDirection(opened === null ? 'back' : 'forward')
+  }
   const setOpened = (section: SettingsSection | null) => {
     if (section === null) {
       closeSettingsSection()
@@ -618,11 +661,24 @@ const SettingsContent = () => {
   return (
     <>
       {current ? (
-        <SettingsPage title={t(current.label)} onBack={() => setOpened(null)} onClose={close}>
+        <SettingsPage
+          title={t(current.label)}
+          onBack={() => setOpened(null)}
+          onClose={close}
+          closing={closing}
+          navKey={current.value}
+          direction={direction}
+        >
           {renderSection()}
         </SettingsPage>
       ) : (
-        <SettingsPage title={t('settings')} onClose={close}>
+        <SettingsPage
+          title={t('settings')}
+          onClose={close}
+          closing={closing}
+          navKey="home"
+          direction={direction}
+        >
           <SettingsHomeGroups open={setOpened} />
         </SettingsPage>
       )}

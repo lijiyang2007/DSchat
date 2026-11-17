@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconChevronRightOutline14, IconCloseOutline16 } from '../base/icons.js'
@@ -20,6 +20,9 @@ export const SettingsPage = ({
   children,
   footer,
   backLabel,
+  closing = false,
+  navKey,
+  direction = 'forward',
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -29,8 +32,22 @@ export const SettingsPage = ({
   children: ReactNode
   footer?: ReactNode
   backLabel?: string
+  /** 正在播退场动画：整页淡出，此时不可交互 */
+  closing?: boolean
+  /** 变化时内容层重新挂载并播一次切换动画；不传则不播 */
+  navKey?: string
+  /** 切换方向：进子页从右侧来，返回从左侧来 */
+  direction?: 'forward' | 'back'
 }) => {
   const t = useTranslate()
+  // 首次挂载时整页已有入场动画，内容层不再重复播一次。
+  // 只有 navKey 真的变过才给内容层加动画，避免无关重渲染把动画又播一遍。
+  const hasNavigated = useRef(false)
+  const previousNavKey = useRef(navKey)
+  if (previousNavKey.current !== navKey) {
+    previousNavKey.current = navKey
+    hasNavigated.current = true
+  }
 
   useEffect(() => {
     const token = {}
@@ -53,7 +70,13 @@ export const SettingsPage = ({
   }, [onBack, onClose])
 
   return createPortal(
-    <div className={styles.page} role="dialog" aria-modal="true" aria-label={backLabel ?? t('settings')}>
+    <div
+      className={styles.page}
+      data-closing={closing ? 'true' : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-label={backLabel ?? t('settings')}
+    >
       <header className={styles.header}>
         {onBack ? (
           <button type="button" className={styles.back} onClick={onBack} aria-label={t('back')}>
@@ -72,7 +95,12 @@ export const SettingsPage = ({
           onClick={onClose}
         />
       </header>
-      <div className={styles.body}>
+      {/* key 变化时重新挂载内容层，顺带把滚动位置复位到顶部 */}
+      <div
+        key={navKey}
+        className={styles.body}
+        data-nav={hasNavigated.current && !closing ? direction : undefined}
+      >
         <div className={styles.bodyInner}>
           <h1 className={styles.title}>{title}</h1>
           {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}

@@ -6,6 +6,38 @@
   flex-direction: column;
   background-color: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
+  /* 整页入场：从下方轻微上浮 + 淡入，和系统设置的全屏页观感一致 */
+  animation: settingsPageEnter 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 关闭时整页淡出下浮；时长需与 SettingsDialog 的 SETTINGS_PAGE_EXIT_MS 一致 */
+.page[data-closing='true'] {
+  animation: settingsPageExit 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@keyframes settingsPageEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes settingsPageExit {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.99);
+  }
 }
 
 .header {
@@ -52,6 +84,80 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-color: var(--scroll-color) transparent;
+}
+
+/* 子页切换：内容层整体左右滑入，头部栏保持不动 */
+.body[data-nav='forward'] {
+  animation: settingsNavForward 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.body[data-nav='back'] {
+  animation: settingsNavBack 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes settingsNavForward {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes settingsNavBack {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* 系统开启「减弱动态效果」时只保留极短淡入，不做位移 */
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .page[data-closing='true'],
+  .body[data-nav] {
+    animation-duration: 0.01ms;
+  }
+
+  .page {
+    animation-name: settingsPageFade;
+  }
+
+  .page[data-closing='true'] {
+    animation-name: settingsPageFadeOut;
+  }
+
+  .body[data-nav] {
+    animation-name: settingsPageFade;
+  }
+}
+
+@keyframes settingsPageFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes settingsPageFadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 .bodyInner {
