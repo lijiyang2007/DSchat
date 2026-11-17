@@ -15,8 +15,15 @@ import {
 } from './zipReader.js'
 
 const SESSION_BATCH_SIZE = 40
+/** 会话批量落库的内存上限：长对话导出单条可达几十 MB，攒满 40 条会把 WebView 内存打爆（闪退） */
+const SESSION_BATCH_MAX_BYTES = 8 * 1024 * 1024
+/** 单个会话 JSON 的硬上限：超过它的 JSON.parse 在移动端 WebView 上必然 OOM，明确报错好过闪退 */
+const MAX_SESSION_ENTRY_BYTES = 96 * 1024 * 1024
 const FILE_BATCH_MAX_COUNT = 16
 const FILE_BATCH_MAX_BYTES = 4 * 1024 * 1024
+
+/** 长归档解析期间给主线程喘息：让渲染与 GC 跑一轮，避免连续大 JSON 解析饿死 UI（ANR/闪退） */
+const yieldToUI = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 /** 从原件字节补充图片 MIME；无法识别时为空字符串，图片身份仍由归档的 is_image 决定。 */
 const imageType = (bytes: Uint8Array): string => {
@@ -122,6 +129,7 @@ export const importArchive = async (
   let index: SessionIndexEntry[] | undefined
   let rootPrefix: string | null = knownRootPrefix ?? null
   let sessionBatch: Session[] = []
+  let sessionBatchBytes = 0
   let fileBatch: db.StoredFile[] = []
   let fileBatchBytes = 0
 
@@ -131,6 +139,7 @@ export const importArchive = async (
     }
     const batch = sessionBatch
     sessionBatch = []
+    sessionBatchBytes = 0
     await db.addStagingSessions(batch)
   }
 
@@ -181,6 +190,14 @@ export const importArchive = async (
         // 账号信息（已脱敏）不导入；文件可能缺失。
         await skipEntry(entry)
       } else if (sessionId !== null) {
+        // 巨型会话先拦：超过硬上限的 JSON.parse 在移动端必然 OOM（闪退），明确报错让用户分包导入
+        if (entry.size > MAX_SESSION_ENTRY_BYTES) {
+          fail('backupSessionTooLarge')
+        }
+        // 每解析 N 个会话让主线程喘息一次：连续大 JSON 解析会饿死渲染导致 ANR
+        if (imported.size > 0 && imported.size % 20 === 0) {
+          await yieldToUI()
+        }
         const local = toLocalSession(readSessionFile(await readJson(entry)))
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
@@ -190,7 +207,12 @@ export const importArchive = async (
           images.set(imagePath, id)
         }
         sessionBatch.push(local.session)
-        if (sessionBatch.length >= SESSION_BATCH_SIZE) {
+        sessionBatchBytes += entry.size
+        // 数量或体积任一到达阈值都先落库：内存占用不随归档长度线性增长
+        if (
+          sessionBatch.length >= SESSION_BATCH_SIZE ||
+          sessionBatchBytes >= SESSION_BATCH_MAX_BYTES
+        ) {
           await flushSessions()
         }
         onProgress?.(imported.size)

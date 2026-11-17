@@ -11,6 +11,7 @@ export type SettingsSection =
   | 'language'
   | 'voice'
   | 'about'
+  | 'feedback'
   | 'model'
   | 'memory'
   | 'data'

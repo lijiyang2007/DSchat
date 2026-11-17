@@ -65,6 +65,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ContextUsage } from './ContextUsage.js'
+import { FeedbackSettings } from './FeedbackSettings.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
 import { ProviderEditor } from './ProviderEditor.js'
@@ -360,7 +361,7 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
         <SettingsEntry
           icon={<IconSearchOutline16 />}
           title={t('settingsHomeHelpLabel')}
-          onClick={() => open('about')}
+          onClick={() => open('feedback')}
         />
       </SettingsGroup>
     </>
@@ -620,7 +621,9 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
                 ? 'settingsTtsVoice'
                 : opened === 'about'
                   ? 'updateSectionLabel'
-                  : 'settings',
+                  : opened === 'feedback'
+                    ? 'settingsHomeHelpLabel'
+                    : 'settings',
         desc: 'settingsPageSubtitle',
         icon: null,
       })
@@ -651,6 +654,9 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
     }
     if (opened === 'about') {
       return <UpdateSetting />
+    }
+    if (opened === 'feedback') {
+      return <FeedbackSettings />
     }
     if (opened === 'model') {
       return <ModelSettings />
