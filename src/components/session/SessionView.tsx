@@ -6,7 +6,6 @@ import { IconNewChatOutline20 } from '../base/icons.js'
 import { IconButton } from '../base/IconButton.js'
 import { newChat } from '../../services/chat/store.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
-import { ContextUsage } from './ContextUsage.js'
 import { MessageList } from '../messages/MessageList.js'
 import { AutoPlayVoiceButton, MobileHeader } from './MobileHeader.js'
 import styles from './SessionView.module.css'
@@ -46,7 +45,6 @@ export const SessionView = ({
           </div>
         </div>
       )}
-      <ContextUsage session={session} />
       <MessageList
         session={session}
         streaming={streaming}

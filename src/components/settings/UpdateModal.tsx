@@ -1,5 +1,6 @@
 import { useTranslate } from '../../i18n/index.js'
 import {
+  cancelUpdateDownload,
   dismissUpdateModal,
   getCurrentAppVersion,
   openReleaseInBrowser,
@@ -39,28 +40,28 @@ export const UpdateModal = () => {
   return (
     <Modal
       title={t('updateModalTitle', { version: latest.version })}
-      closable={!downloading}
+      // 始终可关闭：下载卡住时不能把用户锁死在弹窗里
+      closable
       className={styles.modal}
-      onClose={() => {
-        if (!downloading) {
-          dismissUpdateModal()
-        }
-      }}
+      onClose={dismissUpdateModal}
       footer={
         <div className={styles.footer}>
           {hasUpdate ? (
             <Button
               variant="outlined"
               size="m"
-              disabled={downloading}
               onClick={() => skipReleaseVersion(latest.version)}
             >
               {t('updateActionSkip')}
             </Button>
           ) : null}
           <div className={styles.footerRight}>
-            <Button variant="outlined" size="m" disabled={downloading} onClick={dismissUpdateModal}>
-              {hasUpdate ? t('updateActionLater') : t('close')}
+            <Button variant="outlined" size="m" onClick={dismissUpdateModal}>
+              {downloading
+                ? t('updateActionCancelDownload')
+                : hasUpdate
+                  ? t('updateActionLater')
+                  : t('close')}
             </Button>
             {hasUpdate ? (
               <Button
@@ -150,6 +151,11 @@ export const UpdateModal = () => {
             <div className={styles.errorText}>{download.error}</div>
           )}
           <div className={styles.inlineActions}>
+            {downloading ? (
+              <button type="button" className={styles.linkButton} onClick={cancelUpdateDownload}>
+                {t('updateActionCancelDownload')}
+              </button>
+            ) : null}
             <button
               type="button"
               className={styles.linkButton}

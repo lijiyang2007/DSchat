@@ -61,6 +61,9 @@ public class MainActivity extends BridgeActivity {
     private volatile long updateTotal = 0;
     private volatile String updateError = "";
     private volatile File downloadedApkFile = null;
+    /** 取消标记：前端点「取消下载」时置位，下载线程每轮检查后中止 */
+    private volatile boolean updateCancelled = false;
+    private volatile Thread downloadThread = null;
 
     public class ProxyBridge {
         @JavascriptInterface
@@ -93,6 +96,7 @@ public class MainActivity extends BridgeActivity {
                 updateError = "Invalid APK URL";
                 return;
             }
+            updateCancelled = false;
             updateStatus = "downloading";
             updateProgress = 0;
             updateDownloaded = 0;
@@ -104,7 +108,8 @@ public class MainActivity extends BridgeActivity {
                 ? fileName.replaceAll("[^a-zA-Z0-9._-]", "_")
                 : "DSchat-update.apk";
 
-            Thread downloadThread = new Thread(() -> {
+            updateCancelled = false;
+            downloadThread = new Thread(() -> {
                 File updateDir = new File(getCacheDir(), "updates");
                 if (!updateDir.exists()) {
                     updateDir.mkdirs();
@@ -188,6 +193,10 @@ public class MainActivity extends BridgeActivity {
                         runOnUiThread(() -> triggerApkInstall(finalFile));
                         return;
                     } catch (Exception e) {
+                        if (updateCancelled) {
+                            lastError = "";
+                            break;
+                        }
                         lastError = e.getMessage() != null ? e.getMessage() : "Download failed";
                         updateDownloaded = 0;
                         updateProgress = 0;
@@ -200,8 +209,13 @@ public class MainActivity extends BridgeActivity {
                         }
                     }
                 }
-                updateStatus = "error";
-                updateError = lastError.isEmpty() ? "Download failed" : lastError;
+                if (updateCancelled) {
+                    updateStatus = "idle";
+                    updateError = "";
+                } else {
+                    updateStatus = "error";
+                    updateError = lastError.isEmpty() ? "Download failed" : lastError;
+                }
             }, "DSchatApkDownloader");
             downloadThread.setDaemon(true);
             downloadThread.start();
@@ -216,6 +230,20 @@ public class MainActivity extends BridgeActivity {
                 + ",\"error\":\"" + escapeJson(updateError) + "\""
                 + ",\"hasDownloadedFile\":" + (downloadedApkFile != null && downloadedApkFile.exists())
                 + "}";
+        }
+
+        @JavascriptInterface
+        public void cancelUpdateDownload() {
+            updateCancelled = true;
+            Thread t = downloadThread;
+            if (t != null) {
+                t.interrupt();
+            }
+            updateStatus = "idle";
+            updateProgress = 0;
+            updateDownloaded = 0;
+            updateTotal = 0;
+            updateError = "";
         }
 
         @JavascriptInterface

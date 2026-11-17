@@ -344,7 +344,7 @@ export const useSettings = create<Settings>(() => ({
   contextWindow: Math.max(4000, Math.round(readNumber(KEYS.contextWindow) ?? 1000000)),
   visionSupport: initialVisionSupport(),
   streamThrottle: initialStreamThrottle(),
-  showTokenUsage: readBool(KEYS.showTokenUsage, true),
+  showTokenUsage: readBool(KEYS.showTokenUsage, false),
   fontScale: initialFontScale(),
   autoCollapseThinking: readBool(KEYS.autoCollapseThinking, true),
   asrChannel: readChannel(KEYS.asrChannel),
@@ -597,7 +597,7 @@ export const resetModelAndPolicySettings = () => {
   setContextWindow(1000000)
   setVisionSupport('auto')
   setStreamThrottle('balanced')
-  setShowTokenUsage(true)
+  setShowTokenUsage(false)
   setTemperature(null)
   setTopP(null)
   setMaxTokens(null)

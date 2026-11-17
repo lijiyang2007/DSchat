@@ -5,6 +5,7 @@ import { useSettings } from '../../services/settings.js'
 export type SettingsSection =
   | 'general'
   | 'appearance'
+  | 'chat'
   | 'language'
   | 'voice'
   | 'about'

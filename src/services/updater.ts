@@ -12,17 +12,34 @@ const RELEASES_LIST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases?
  * GitHub 加速镜像。国内网络直连 api.github.com 常被阻断，
  * 这里按顺序尝试：直连 → 各镜像，任何一个通了就能检查更新 / 下载安装包。
  */
-export const UPDATE_MIRRORS = [
+/**
+ * jsDelivr 的包版本清单。国内可直连，不依赖 GitHub 也不依赖镜像，
+ * 是「查更新」最可靠的一条路；拿不到 release 正文，但版本号够用。
+ */
+const JSDELIVR_API = `https://data.jsdelivr.com/v1/packages/gh/${GITHUB_REPO}`
+
+/** 查 release 元数据用的镜像（实测能透传 api.github.com） */
+export const API_MIRRORS = [
+  'https://gh-proxy.net/',
   'https://gh-proxy.com/',
   'https://ghfast.top/',
-  'https://ghproxy.net/',
 ]
 
-/** 把 GitHub 地址展开成「直连 + 各镜像」的候选列表 */
-export const withMirrors = (url: string): string[] => [
-  url,
-  ...UPDATE_MIRRORS.map((prefix) => `${prefix}${url}`),
+/** 下载 APK 用的镜像（实测能透传 release 资源） */
+export const DOWNLOAD_MIRRORS = [
+  'https://ghfast.top/',
+  'https://ghproxy.net/',
+  'https://gh-proxy.net/',
 ]
+
+/** 兼容旧名字：浏览器兜底下载用下载类镜像 */
+export const UPDATE_MIRRORS = DOWNLOAD_MIRRORS
+
+/** 把 GitHub 地址展开成候选列表；镜像优先，直连放最后兜底 */
+export const withMirrors = (
+  url: string,
+  mirrors: readonly string[] = DOWNLOAD_MIRRORS
+): string[] => [...mirrors.map((prefix) => `${prefix}${url}`), url]
 
 /** 依次尝试候选地址，返回第一个成功的结果 */
 const fetchFirstAvailable = async <T>(
@@ -75,6 +92,7 @@ type AndroidUpdaterBridge = {
   downloadAndInstallApk?: (apkUrl: string, fileName: string, mirrorsJson?: string) => void
   getUpdateDownloadState?: () => string
   retryInstallDownloadedApk?: () => void
+  cancelUpdateDownload?: () => void
 }
 
 const getAndroidBridge = (): AndroidUpdaterBridge | null => {
@@ -276,6 +294,37 @@ const parseGitHubRelease = (raw: unknown): ReleaseInfo | null => {
 }
 
 /**
+ * 从 jsDelivr 的版本清单里取最高版本，构造一份最小可用的 ReleaseInfo。
+ * release 正文和 APK 直链拿不到，下载地址按 GitHub 约定拼出来（走下载镜像）。
+ */
+const fetchFromJsdelivr = async (signal: AbortSignal): Promise<ReleaseInfo | null> => {
+  const response = await fetchWithDevProxy(JSDELIVR_API, { signal })
+  if (!response.ok) {
+    return null
+  }
+  const payload = (await response.json()) as { versions?: { version?: string }[] }
+  const versions = (payload.versions ?? [])
+    .map((item) => item.version)
+    .filter((v): v is string => typeof v === 'string' && /^\d+\.\d+\.\d+/.test(v))
+  if (versions.length === 0) {
+    return null
+  }
+  const highest = versions.reduce((a, b) => (compareVersions(a, b) > 0 ? a : b))
+  const tag = `v${highest}`
+  return {
+    version: highest,
+    tagName: tag,
+    title: `v${highest}`,
+    body: '',
+    publishedAt: '',
+    htmlUrl: `${GITHUB_REPO_URL}/releases/tag/${tag}`,
+    apkUrl: `${GITHUB_REPO_URL}/releases/download/${tag}/DSchat-${tag}.apk`,
+    apkName: `DSchat-${tag}.apk`,
+    apkSize: null,
+  }
+}
+
+/**
  * 从 release 列表里挑版本号最大的那条。
  * 跳过草稿和预发布；版本号比较用 compareVersions，不看发布时间。
  */
@@ -313,10 +362,10 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
   try {
     // 每个候选地址单独限时：镜像被墙时能尽快换下一个，而不是整体超时
     const response = await fetchFirstAvailable(
-      withMirrors(RELEASES_LIST_API),
+      withMirrors(RELEASES_LIST_API, API_MIRRORS),
       async (url) => {
         const controller = new AbortController()
-        const timeout = window.setTimeout(() => controller.abort(), 8000)
+        const timeout = window.setTimeout(() => controller.abort(), 5000)
         try {
           const attempt = await fetchWithDevProxy(url, {
             headers: { Accept: 'application/vnd.github+json' },
@@ -374,6 +423,25 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
       showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
     }
   } catch (error) {
+    // GitHub 和镜像全都不通时，最后试一次 jsDelivr（国内可直连）
+    const fallback = await fetchFromJsdelivr(AbortSignal.timeout(8000)).catch(() => null)
+    if (fallback) {
+      const current = getCurrentAppVersion()
+      const hasUpdate = compareVersions(fallback.version, current.versionName) > 0
+      const skipped = readSkippedVersion()
+      useUpdater.setState({
+        checking: false,
+        latest: fallback,
+        hasUpdate,
+        lastCheckedAt: Date.now(),
+        error: null,
+        modalOpen: hasUpdate && (manual || skipped !== fallback.version),
+      })
+      if (manual && !hasUpdate) {
+        showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
+      }
+      return
+    }
     const message = error instanceof Error ? error.message : String(error)
     useUpdater.setState({ checking: false, error: message })
     if (manual) {
@@ -430,6 +498,22 @@ export const startUpdateInstall = () => {
     return
   }
   openReleaseInBrowser(latest.apkUrl ?? latest.htmlUrl)
+}
+
+/**
+ * 取消正在进行的下载。
+ * 之前下载中没有取消入口、弹窗也关不掉，一旦镜像卡住整个页面就动不了；
+ * 这里先让原生层中止下载，再把状态复位。
+ */
+export const cancelUpdateDownload = () => {
+  stopPollingDownload()
+  const bridge = getAndroidBridge()
+  try {
+    ;(bridge as { cancelUpdateDownload?: () => void })?.cancelUpdateDownload?.()
+  } catch {
+    // 原生层没有这个方法时忽略，下面照样复位状态
+  }
+  useUpdater.setState({ download: EMPTY_DOWNLOAD, modalOpen: false })
 }
 
 export const retryPendingAndroidInstall = () => {
