@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { setRuntimeApiOrigin } from './api/origin.js'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
+import {
+  createOfficialProvider,
+  newProviderId,
+  type Provider,
+} from './providers.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -55,7 +60,12 @@ export const DEFAULT_MODEL = 'deepseek-flash'
 export const DEFAULT_SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 本机设置，存 localStorage */
 export type Settings = {
+  /** @deprecated 迁移到 providers；保留以兼容旧的读取点，始终反映当前供应商 */
   apiKey: string | null
+  /** 所有供应商，第一个是内置的官方条目 */
+  providers: Provider[]
+  /** 当前使用的供应商 id */
+  activeProviderId: string
   locale: Locale
   themePreference: ThemePreference
   location: UserLocation | null
@@ -118,6 +128,8 @@ export type Settings = {
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
+  providers: 'chat-demo:providers',
+  activeProviderId: 'chat-demo:active-provider',
   locale: 'chat-demo:locale',
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
@@ -318,8 +330,89 @@ const initialChatProtocol = (): ChatProtocol => {
 const initialApiOrigin = read(KEYS.apiOrigin) ?? ''
 setRuntimeApiOrigin(initialApiOrigin)
 
+/**
+ * 读取供应商列表。
+ *
+ * 老版本只有「一个 API Key + 一个地址 + 一个模型」的扁平配置，
+ * 这里在首次读取时把它整体搬成第一个自定义供应商，用户升级后
+ * 原来的 Key、地址、模型都还在，不会突然要求重新配置。
+ */
+const initialProviders = (): Provider[] => {
+  const raw = read(KEYS.providers)
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Provider[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // 补齐内置条目，防止旧数据里没有它
+        const hasOfficial = parsed.some((item) => item.id === 'deepseek-official')
+        return hasOfficial ? parsed : [createOfficialProvider(), ...parsed]
+      }
+    } catch {
+      // 解析失败时走下面的迁移
+    }
+  }
+
+  // 迁移旧的扁平配置
+  const legacyKey = read(KEYS.apiKey) ?? ''
+  const legacyOrigin = read(KEYS.apiOrigin) ?? ''
+  const legacyModel = read(KEYS.model) ?? ''
+  const legacyProtocol = initialChatProtocol()
+  const legacyHeaders = read(KEYS.customHeaders) ?? ''
+  const official = createOfficialProvider()
+
+  // 旧配置就是官方默认（没改地址、没自定义模型）时，不算额外的供应商
+  const isPlainOfficial =
+    !legacyOrigin && (!legacyModel || legacyModel === DEFAULT_MODEL) && legacyProtocol === 'deepseek'
+
+  if (isPlainOfficial) {
+    return [legacyKey ? { ...official, apiKey: legacyKey } : official]
+  }
+
+  return [
+    official,
+    {
+      id: newProviderId(),
+      name: legacyOrigin ? hostLabel(legacyOrigin) : 'DeepSeek',
+      custom: true,
+      protocol: legacyProtocol,
+      baseUrl: legacyOrigin,
+      apiKey: legacyKey,
+      headers: legacyHeaders,
+      models: legacyModel
+        ? [{ id: legacyModel, name: '', inputs: { text: true, image: true } }]
+        : [],
+      model: legacyModel,
+    },
+  ]
+}
+
+/** 从地址里取一个能当名字用的主机名：https://x.com/v1 -> x.com */
+const hostLabel = (url: string): string => {
+  try {
+    return new URL(url).hostname || url
+  } catch {
+    return url.replace(/^https?:\/\//i, '').split('/')[0] || url
+  }
+}
+
+const initialProvidersCache = initialProviders()
+
+const initialActiveProviderId = (): string => {
+  const saved = read(KEYS.activeProviderId)
+  if (saved && initialProvidersCache.some((item) => item.id === saved)) {
+    return saved
+  }
+  return initialProvidersCache[0].id
+}
+
+/** 当前生效的供应商 */
+export const activeProvider = (state: Settings = useSettings.getState()): Provider =>
+  state.providers.find((item) => item.id === state.activeProviderId) ?? state.providers[0]
+
 export const useSettings = create<Settings>(() => ({
-  apiKey: read(KEYS.apiKey),
+  apiKey: initialProvidersCache.find((item) => item.id === initialActiveProviderId())?.apiKey || null,
+  providers: initialProvidersCache,
+  activeProviderId: initialActiveProviderId(),
   locale: initialLocale(),
   location: initialLocation(),
   themePreference: initialThemePreference(),
@@ -402,10 +495,98 @@ export const setDailyTokenLimit = (value: number) => {
   useSettings.setState({ dailyTokenLimit: limit })
 }
 
+/* ------------------------------ 供应商 ------------------------------ */
+
+/** 把供应商列表写回本地，并同步旧的扁平字段（apiKey / model / apiOrigin 等） */
+const commitProviders = (providers: Provider[], activeId: string) => {
+  write(KEYS.providers, JSON.stringify(providers))
+  write(KEYS.activeProviderId, activeId)
+  const active = providers.find((item) => item.id === activeId) ?? providers[0]
+  // 旧读取点（apiKey / model / apiOrigin / chatProtocol）跟随当前供应商，
+  // 这样不用改所有调用处也能立刻生效
+  write(KEYS.apiKey, active.apiKey || null)
+  write(KEYS.model, active.model || null)
+  write(KEYS.apiOrigin, active.baseUrl || null)
+  write(KEYS.chatProtocol, active.protocol)
+  write(KEYS.customHeaders, active.headers || null)
+  setRuntimeApiOrigin(active.baseUrl)
+  useSettings.setState({
+    providers,
+    activeProviderId: active.id,
+    apiKey: active.apiKey || null,
+    model: active.model || DEFAULT_MODEL,
+    apiOrigin: active.baseUrl,
+    chatProtocol: active.protocol,
+    customHeaders: active.headers,
+  })
+}
+
+/** 切换当前使用的供应商 */
+export const setActiveProvider = (id: string) => {
+  const { providers } = useSettings.getState()
+  if (!providers.some((item) => item.id === id)) {
+    return
+  }
+  commitProviders(providers, id)
+}
+
+/** 新增一个空白供应商并直接切过去；返回它的 id */
+export const addProvider = (seed?: Partial<Provider>): string => {
+  const { providers } = useSettings.getState()
+  const provider: Provider = {
+    id: newProviderId(),
+    name: seed?.name ?? '',
+    custom: true,
+    protocol: seed?.protocol ?? 'openai',
+    baseUrl: seed?.baseUrl ?? '',
+    apiKey: seed?.apiKey ?? '',
+    headers: seed?.headers ?? '',
+    models: seed?.models ?? [],
+    model: seed?.model ?? '',
+  }
+  // 追加到末尾：列表按添加顺序向下增长
+  commitProviders([...providers, provider], provider.id)
+  return provider.id
+}
+
+/** 更新某个供应商的字段（只改传进来的部分） */
+export const updateProvider = (id: string, patch: Partial<Provider>) => {
+  const { providers } = useSettings.getState()
+  const next = providers.map((item) => (item.id === id ? { ...item, ...patch, id: item.id } : item))
+  commitProviders(next, useSettings.getState().activeProviderId === id ? id : useSettings.getState().activeProviderId)
+}
+
+/** 删除供应商；内置条目不能删，删掉当前的会切回官方 */
+export const removeProvider = (id: string) => {
+  const { providers, activeProviderId } = useSettings.getState()
+  const target = providers.find((item) => item.id === id)
+  if (!target || target.builtin) {
+    return false
+  }
+  const next = providers.filter((item) => item.id !== id)
+  const nextActive = activeProviderId === id ? next[0].id : activeProviderId
+  commitProviders(next, nextActive)
+  return true
+}
+
+/** 把某个字段同步到当前供应商（内部用，避免循环调用） */
+const syncActiveProvider = (patch: Partial<Provider>) => {
+  const { providers, activeProviderId } = useSettings.getState()
+  const next = providers.map((item) =>
+    item.id === activeProviderId ? { ...item, ...patch, id: item.id } : item
+  )
+  write(KEYS.providers, JSON.stringify(next))
+  useSettings.setState({ providers: next })
+}
+
 export const setApiKey = (apiKey: string | null) => {
   write(KEYS.apiKey, apiKey)
   useSettings.setState({ apiKey })
+  // 同步回当前供应商，切换供应商时不会串
+  syncActiveProvider({ apiKey: apiKey ?? '' })
 }
+
+/* -------------------------------------------------------------------- */
 
 export const setThinking = (thinking: boolean) => {
   write(KEYS.thinking, String(thinking))
@@ -476,6 +657,7 @@ export const setSiderCollapsed = (siderCollapsed: boolean) => {
 export const setChatProtocol = (chatProtocol: ChatProtocol) => {
   write(KEYS.chatProtocol, chatProtocol)
   useSettings.setState({ chatProtocol })
+  syncActiveProvider({ protocol: chatProtocol })
 }
 
 export const setAsrChannel = (asrChannel: ServiceChannelConfig) => {
@@ -492,16 +674,19 @@ export const setApiOrigin = (apiOrigin: string) => {
   write(KEYS.apiOrigin, apiOrigin ? apiOrigin : null)
   setRuntimeApiOrigin(apiOrigin)
   useSettings.setState({ apiOrigin })
+  syncActiveProvider({ baseUrl: apiOrigin })
 }
 
 export const setCustomHeaders = (customHeaders: string) => {
   write(KEYS.customHeaders, customHeaders ? customHeaders : null)
   useSettings.setState({ customHeaders })
+  syncActiveProvider({ headers: customHeaders })
 }
 
 export const setModel = (model: string) => {
   write(KEYS.model, model)
   useSettings.setState({ model })
+  syncActiveProvider({ model })
 }
 
 export const setSystemPrompt = (systemPrompt: string) => {

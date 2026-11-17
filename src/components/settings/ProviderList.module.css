@@ -1,0 +1,162 @@
+/* 供应商列表：每行一张卡片，添加按钮追加在末尾 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px 14px 14px 16px;
+  border-radius: 14px;
+  background-color: var(--dsw-specific-sidebar-fill);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowActive {
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary);
+}
+
+.info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 「自定义」小标签 */
+.tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--dsw-alias-label-secondary);
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 状态点：当前使用中为品牌色，否则为灰 */
+.dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-label-dimmed);
+}
+
+.dotActive {
+  background-color: var(--dsw-alias-state-success-primary, #2ea043);
+}
+
+.activeLabel {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-success-primary, #2ea043);
+}
+
+.metaLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.metaText {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 17px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger {
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-state-error-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* 「添加供应商」：虚线卡片，追加在列表末尾 */
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover {
+    border-color: var(--dsw-alias-brand-primary);
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.addIcon {
+  display: inline-flex;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  font-size: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}

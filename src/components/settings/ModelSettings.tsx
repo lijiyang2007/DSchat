@@ -44,11 +44,12 @@ import {
 } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { Select, type SelectOption } from '../base/Select.js'
-import { ApiKeyConfirm, ApiKeyField, type useApiKeyEditor } from './ApiKeyField.js'
 import {
   CapabilityChannelCard,
   ModelFetcherInput,
 } from './ChannelConfigField.js'
+import { ProviderEditor } from './ProviderEditor.js'
+import { ProviderList } from './ProviderList.js'
 import styles from './Settings.module.css'
 
 /** 上下文窗口的人类可读形式：128000 -> 128K，1000000 -> 1M */
@@ -292,21 +293,21 @@ const LOCAL_PRESETS = [
   { label: 'LocalAI (:8080)', url: 'http://127.0.0.1:8080/v1' },
 ] as const
 
-/** 模型与接口设置：API 密钥、语言模型（动态获取）、多能力渠道及回复/拒答策略 */
-export const ModelSettings = ({
-  apiKeyEditor,
-  isMobile,
-}: {
-  apiKeyEditor: ReturnType<typeof useApiKeyEditor>
-  isMobile: boolean
-}) => {
+/** 模型与接口设置：供应商列表、请求参数、多能力渠道及回复/拒答策略 */
+export const ModelSettings = () => {
   const t = useTranslate()
   const settings = useSettings()
   const [snippetOpen, setSnippetOpen] = useState(false)
   const [snippetText, setSnippetText] = useState('')
   const [snippetStatus, setSnippetStatus] = useState<{ text: string; error?: boolean } | null>(null)
+  // 正在编辑的供应商 id；null 表示看列表
+  const [editingId, setEditingId] = useState<string | null>(null)
   const mainBaseUrl = settings.apiOrigin.trim() || getApiOrigin()
   const mainApiKey = settings.apiKey ?? ''
+
+  const editing = editingId
+    ? (settings.providers.find((item) => item.id === editingId) ?? null)
+    : null
 
   const protocolOptions: SelectOption<ChatProtocol>[] = [
     { value: 'deepseek', label: t('chatProtocolDeepSeek') },
@@ -319,153 +320,169 @@ export const ModelSettings = ({
     <>
       <div className={styles.groupTitle}>{t('modelSettingsSectionRequest')}</div>
 
-      <ApiKeyField editor={apiKeyEditor} />
-      {settings.chatProtocol === 'local' ? (
-        <div className={styles.fetchHint} style={{ marginTop: -4, marginBottom: 8 }}>
-          {t('localApiKeyOptionalHint')}
+      {/* 供应商：列表 ↔ 编辑，每加一个向下追加一格 */}
+      {editing ? (
+        <div className={styles.cell}>
+          <ProviderEditor
+            provider={editing}
+            onSaved={() => setEditingId(null)}
+            onCancel={() => setEditingId(null)}
+          />
         </div>
-      ) : null}
-      {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
+      ) : (
+        <div className={styles.cell}>
+          <div className={styles.providerIntro}>{t('providerListHint')}</div>
+          <ProviderList onEdit={setEditingId} />
+        </div>
+      )}
 
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.fieldHeader}>
-            <span className={styles.description}>{t('importSnippetToggle')}</span>
-            <button
-              type="button"
-              className={styles.linkAction}
-              onClick={() => {
-                setSnippetOpen((prev) => !prev)
-                setSnippetStatus(null)
-              }}
-            >
-              {snippetOpen ? t('cancel') : t('importSnippetToggle')}
-            </button>
-          </div>
-          {snippetOpen ? (
-            <>
-              <textarea
-                className={styles.textareaInput}
-                placeholder={t('importSnippetPlaceholder')}
-                spellCheck={false}
-                value={snippetText}
-                onChange={(event) => setSnippetText(event.target.value)}
-              />
-              <div className={styles.errorRow}>
-                {snippetStatus ? (
-                  <span className={snippetStatus.error ? styles.error : styles.fetchHint}>
-                    {snippetStatus.text}
-                  </span>
-                ) : (
-                  <span />
-                )}
-                <Button
-                  size="s"
-                  disabled={!snippetText.trim()}
+      {!editing ? (
+        <>
+          <div className={styles.cell}>
+            <div className={styles.field}>
+              <div className={styles.fieldHeader}>
+                <span className={styles.description}>{t('importSnippetToggle')}</span>
+                <button
+                  type="button"
+                  className={styles.linkAction}
                   onClick={() => {
-                    if (applyConfigSnippet(snippetText)) {
-                      setSnippetStatus({ text: t('importSnippetSuccess') })
-                      setSnippetText('')
-                    } else {
-                      setSnippetStatus({ text: t('importSnippetEmpty'), error: true })
-                    }
+                    setSnippetOpen((prev) => !prev)
+                    setSnippetStatus(null)
                   }}
                 >
-                  {t('importSnippetApply')}
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </div>
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.label}>{t('chatProtocolLabel')}</div>
-          <div className={styles.description}>{t('chatProtocolDesc')}</div>
-          <Select
-            value={settings.chatProtocol}
-            options={protocolOptions}
-            ariaLabel={t('chatProtocolLabel')}
-            onChange={(protocol) => {
-            setChatProtocol(protocol)
-              if (protocol === 'local' && !settings.apiOrigin.trim()) {
-                setApiOrigin('http://127.0.0.1:11434/v1')
-                if (settings.model === DEFAULT_MODEL) {
-                  setModel('')
-                }
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.fieldHeader}>
-            <div className={styles.label}>{t('modelSettingsApiOriginLabel')}</div>
-            {settings.apiOrigin ? (
-              <button type="button" className={styles.linkAction} onClick={() => setApiOrigin('')}>
-                {t('modelSettingsRestoreDefault')}
-              </button>
-            ) : null}
-          </div>
-          <div className={styles.description}>{t('modelSettingsApiOriginDesc')}</div>
-          <input
-            type="url"
-            className={styles.textInput}
-            placeholder={
-              settings.chatProtocol === 'local'
-                ? 'http://127.0.0.1:11434/v1'
-                : t('modelSettingsApiOriginPlaceholder')
-            }
-            spellCheck={false}
-            value={settings.apiOrigin}
-            onChange={(event) => setApiOrigin(event.target.value)}
-          />
-          {settings.chatProtocol === 'local' ? (
-            <div className={styles.presetRow}>
-              <span className={styles.fetchHint}>{t('localPresetLabel')}</span>
-              {LOCAL_PRESETS.map((preset) => (
-                <button
-                  key={preset.url}
-                  type="button"
-                  className={styles.presetPill}
-                  onClick={() => setApiOrigin(preset.url)}
-                >
-                  {preset.label}
+                  {snippetOpen ? t('cancel') : t('importSnippetToggle')}
                 </button>
-              ))}
+              </div>
+              {snippetOpen ? (
+                <>
+                  <textarea
+                    className={styles.textareaInput}
+                    placeholder={t('importSnippetPlaceholder')}
+                    spellCheck={false}
+                    value={snippetText}
+                    onChange={(event) => setSnippetText(event.target.value)}
+                  />
+                  <div className={styles.errorRow}>
+                    {snippetStatus ? (
+                      <span className={snippetStatus.error ? styles.error : styles.fetchHint}>
+                        {snippetStatus.text}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <Button
+                      size="s"
+                      disabled={!snippetText.trim()}
+                      onClick={() => {
+                        if (applyConfigSnippet(snippetText)) {
+                          setSnippetStatus({ text: t('importSnippetSuccess') })
+                          setSnippetText('')
+                        } else {
+                          setSnippetStatus({ text: t('importSnippetEmpty'), error: true })
+                        }
+                      }}
+                    >
+                      {t('importSnippetApply')}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.fieldHeader}>
-            <div className={styles.label}>{t('modelSettingsModelLabel')}</div>
-            {settings.model !== DEFAULT_MODEL ? (
-              <button
-                type="button"
-                className={styles.linkAction}
-                onClick={() => setModel(DEFAULT_MODEL)}
-              >
-                {t('modelSettingsRestoreDefault')}
-              </button>
-            ) : null}
           </div>
-          <div className={styles.description}>{t('modelSettingsModelDesc')}</div>
-          <ModelFetcherInput
-            value={settings.model}
-            baseUrl={mainBaseUrl}
-            apiKey={mainApiKey}
-            customHeaders={settings.customHeaders}
-            placeholder={t('modelSettingsModelPlaceholder')}
-            onChange={setModel}
-          />
-        </div>
-      </div>
+
+          <div className={styles.cell}>
+            <div className={styles.field}>
+              <div className={styles.label}>{t('chatProtocolLabel')}</div>
+              <div className={styles.description}>{t('chatProtocolDesc')}</div>
+              <Select
+                value={settings.chatProtocol}
+                options={protocolOptions}
+                ariaLabel={t('chatProtocolLabel')}
+                onChange={(protocol) => {
+                  setChatProtocol(protocol)
+                  if (protocol === 'local' && !settings.apiOrigin.trim()) {
+                    setApiOrigin('http://127.0.0.1:11434/v1')
+                    if (settings.model === DEFAULT_MODEL) {
+                      setModel('')
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className={styles.cell}>
+            <div className={styles.field}>
+              <div className={styles.fieldHeader}>
+                <div className={styles.label}>{t('modelSettingsApiOriginLabel')}</div>
+                {settings.apiOrigin ? (
+                  <button
+                    type="button"
+                    className={styles.linkAction}
+                    onClick={() => setApiOrigin('')}
+                  >
+                    {t('modelSettingsRestoreDefault')}
+                  </button>
+                ) : null}
+              </div>
+              <div className={styles.description}>{t('modelSettingsApiOriginDesc')}</div>
+              <input
+                type="url"
+                className={styles.textInput}
+                placeholder={
+                  settings.chatProtocol === 'local'
+                    ? 'http://127.0.0.1:11434/v1'
+                    : t('modelSettingsApiOriginPlaceholder')
+                }
+                spellCheck={false}
+                value={settings.apiOrigin}
+                onChange={(event) => setApiOrigin(event.target.value)}
+              />
+              {settings.chatProtocol === 'local' ? (
+                <div className={styles.presetRow}>
+                  <span className={styles.fetchHint}>{t('localPresetLabel')}</span>
+                  {LOCAL_PRESETS.map((preset) => (
+                    <button
+                      key={preset.url}
+                      type="button"
+                      className={styles.presetPill}
+                      onClick={() => setApiOrigin(preset.url)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className={styles.cell}>
+            <div className={styles.field}>
+              <div className={styles.fieldHeader}>
+                <div className={styles.label}>{t('modelSettingsModelLabel')}</div>
+                {settings.model !== DEFAULT_MODEL ? (
+                  <button
+                    type="button"
+                    className={styles.linkAction}
+                    onClick={() => setModel(DEFAULT_MODEL)}
+                  >
+                    {t('modelSettingsRestoreDefault')}
+                  </button>
+                ) : null}
+              </div>
+              <div className={styles.description}>{t('modelSettingsModelDesc')}</div>
+              <ModelFetcherInput
+                value={settings.model}
+                baseUrl={mainBaseUrl}
+                apiKey={mainApiKey}
+                customHeaders={settings.customHeaders}
+                placeholder={t('modelSettingsModelPlaceholder')}
+                onChange={setModel}
+              />
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <div className={styles.cell}>
         <div className={styles.field}>

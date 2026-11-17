@@ -22,7 +22,6 @@ import {
   exportHistory,
   importHistory,
 } from '../../services/chat/backup.js'
-import { useIsMobile } from '../../app/viewport.js'
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -64,7 +63,6 @@ import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
-import { useApiKeyEditor } from './ApiKeyField.js'
 import { ContextUsage } from './ContextUsage.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
@@ -79,8 +77,8 @@ import { SettingsEntry, SettingsGroup, SettingsPage } from './SettingsPage.js'
 import styles from './Settings.module.css'
 
 /**
- * 设置弹窗：全屏设置页。打开时整页淡入上浮，关闭时淡出下浮；
- * 主页与子页之间是同一个页面实例，只有内容层做左右滑动，不会整页重播入场动画。
+ * 璁剧疆寮圭獥锛氬叏灞忚缃〉銆傛墦寮€鏃舵暣椤垫贰鍏ヤ笂娴紝鍏抽棴鏃舵贰鍑轰笅娴紱
+ * 涓婚〉涓庡瓙椤典箣闂存槸鍚屼竴涓〉闈㈠疄渚嬶紝鍙湁鍐呭灞傚仛宸﹀彸婊戝姩锛屼笉浼氭暣椤甸噸鎾叆鍦哄姩鐢汇€?
  */
 export const SettingsDialog = () => {
   const open = useSettingsDialog((state) => state.open)
@@ -96,7 +94,7 @@ export const SettingsDialog = () => {
     if (!mounted) {
       return
     }
-    // 关闭时先播退场动画再卸载；用户关掉动效时直接卸载
+    // 鍏抽棴鏃跺厛鎾€€鍦哄姩鐢诲啀鍗歌浇锛涚敤鎴峰叧鎺夊姩鏁堟椂鐩存帴鍗歌浇
     if (prefersReducedMotion()) {
       setMounted(false)
       setClosing(false)
@@ -113,7 +111,7 @@ export const SettingsDialog = () => {
   return mounted ? <SettingsContent closing={closing} /> : null
 }
 
-/** 退场动画时长，与 SettingsPage.module.css 里的 settingsPageExit 保持一致 */
+/** 閫€鍦哄姩鐢绘椂闀匡紝涓?SettingsPage.module.css 閲岀殑 settingsPageExit 淇濇寔涓€鑷?*/
 const SETTINGS_PAGE_EXIT_MS = 180
 
 const prefersReducedMotion = () =>
@@ -154,8 +152,8 @@ const sections: {
 ]
 
 /**
- * 账号登录入口：未登录显示「登录 DeepSeek 账号」，登录后显示账号名与退出。
- * 用的是平台 OAuth（和 DSH 桌面版同一套），token 走 x-dsh-auth-token 头。
+ * 璐﹀彿鐧诲綍鍏ュ彛锛氭湭鐧诲綍鏄剧ず銆岀櫥褰?DeepSeek 璐﹀彿銆嶏紝鐧诲綍鍚庢樉绀鸿处鍙峰悕涓庨€€鍑恒€?
+ * 鐢ㄧ殑鏄钩鍙?OAuth锛堝拰 DSH 妗岄潰鐗堝悓涓€濂楋級锛宼oken 璧?x-dsh-auth-token 澶淬€?
  */
 const AccountSignInEntry = () => {
   const t = useTranslate()
@@ -212,8 +210,8 @@ const AccountSignInEntry = () => {
 }
 
 /**
- * 设置首页：按「账户 / 应用 / 关于」分组的入口列表。
- * 每行右侧展示当前值（语言、外观、版本号等），点进去是详细设置。
+ * 璁剧疆棣栭〉锛氭寜銆岃处鎴?/ 搴旂敤 / 鍏充簬銆嶅垎缁勭殑鍏ュ彛鍒楄〃銆?
+ * 姣忚鍙充晶灞曠ず褰撳墠鍊硷紙璇█銆佸瑙傘€佺増鏈彿绛夛級锛岀偣杩涘幓鏄缁嗚缃€?
  */
 const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void }) => {
   const t = useTranslate()
@@ -311,7 +309,7 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
   )
 }
 
-/** 字号四档的显示文案，与 FONT_SCALES 一一对应 */
+/** 瀛楀彿鍥涙。鐨勬樉绀烘枃妗堬紝涓?FONT_SCALES 涓€涓€瀵瑰簲 */
 const FONT_SIZE_LABELS = [
   'settingsFontSizeSmall',
   'settingsFontSizeStandard',
@@ -320,8 +318,8 @@ const FONT_SIZE_LABELS = [
 ] as const
 
 /**
- * 对话设置：上下文用量 + 自动压缩 + 每轮 token 用量开关。
- * 对话里不再显示进度条，避免用户盯着百分比产生焦虑；想了解时看一眼即可。
+ * 瀵硅瘽璁剧疆锛氫笂涓嬫枃鐢ㄩ噺 + 鑷姩鍘嬬缉 + 姣忚疆 token 鐢ㄩ噺寮€鍏炽€?
+ * 瀵硅瘽閲屼笉鍐嶆樉绀鸿繘搴︽潯锛岄伩鍏嶇敤鎴风洴鐫€鐧惧垎姣斾骇鐢熺劍铏戯紱鎯充簡瑙ｆ椂鐪嬩竴鐪煎嵆鍙€?
  */
 const ChatSettings = () => {
   const t = useTranslate()
@@ -475,12 +473,11 @@ const AppearanceSettings = () => {
 
 const SettingsContent = ({ closing }: { closing: boolean }) => {
   const t = useTranslate()
-  const isMobile = useIsMobile()
-  // 当前子页由 store 保存，返回键与 Esc 才能逐级返回
+  // 褰撳墠瀛愰〉鐢?store 淇濆瓨锛岃繑鍥為敭涓?Esc 鎵嶈兘閫愮骇杩斿洖
   const opened = useSettingsDialog((state) => state.page)
-  // 记录切换方向：进子页从右侧滑入，返回主页从左侧滑入。
-  // 用上一次的 page 推导，安卓返回键走 store 也能拿到正确方向。
-  // 在渲染期间直接纠正（React 允许的自纠正写法），保证首次提交就带上正确方向，不会先播错再纠正。
+  // 璁板綍鍒囨崲鏂瑰悜锛氳繘瀛愰〉浠庡彸渚ф粦鍏ワ紝杩斿洖涓婚〉浠庡乏渚ф粦鍏ャ€?
+  // 鐢ㄤ笂涓€娆＄殑 page 鎺ㄥ锛屽畨鍗撹繑鍥為敭璧?store 涔熻兘鎷垮埌姝ｇ‘鏂瑰悜銆?
+  // 鍦ㄦ覆鏌撴湡闂寸洿鎺ョ籂姝ｏ紙React 鍏佽鐨勮嚜绾犳鍐欐硶锛夛紝淇濊瘉棣栨鎻愪氦灏卞甫涓婃纭柟鍚戯紝涓嶄細鍏堟挱閿欏啀绾犳銆?
   const previousPage = useRef(opened)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   if (previousPage.current !== opened) {
@@ -494,8 +491,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
       openSettingsSection(section)
     }
   }
-  // 切换分组不丢失正在输入的 API Key 与导入状态
-  const apiKeyEditor = useApiKeyEditor()
+  // 鍒囨崲鍒嗙粍涓嶄涪澶卞鍏ョ姸鎬侊紙API Key 杈撳叆鏀圭敱渚涘簲鍟嗙紪杈戦〉鑷繁绠＄悊锛?
   const historyImport = useHistoryImport()
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
@@ -507,7 +503,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
     }
   }
 
-  // 子页标题：首页入口列表只含部分分组，appearance 等单独补标题
+  // 瀛愰〉鏍囬锛氶椤靛叆鍙ｅ垪琛ㄥ彧鍚儴鍒嗗垎缁勶紝appearance 绛夊崟鐙ˉ鏍囬
   const current = opened
     ? (sections.find((item) => item.value === opened) ?? {
         value: opened,
@@ -541,7 +537,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
         </>
       )
     }
-    // 从首页直接点进来的单项设置页，只显示这一项，避免和「通用设置」重复
+    // 浠庨椤电洿鎺ョ偣杩涙潵鐨勫崟椤硅缃〉锛屽彧鏄剧ず杩欎竴椤癸紝閬垮厤鍜屻€岄€氱敤璁剧疆銆嶉噸澶?
     if (opened === 'chat') {
       return <ChatSettings />
     }
@@ -555,7 +551,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
       return <UpdateSetting />
     }
     if (opened === 'model') {
-      return <ModelSettings apiKeyEditor={apiKeyEditor} isMobile={isMobile} />
+      return <ModelSettings />
     }
     if (opened === 'appearance') {
       return <AppearanceSettings />
@@ -616,7 +612,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
   )
 }
 
-/** 删除确认保留在设置之上；失败可重试，成功只关闭确认弹窗。 */
+/** 鍒犻櫎纭淇濈暀鍦ㄨ缃箣涓婏紱澶辫触鍙噸璇曪紝鎴愬姛鍙叧闂‘璁ゅ脊绐椼€?*/
 const DeleteAllConfirm = ({
   historyDelete,
 }: {
@@ -945,7 +941,7 @@ const LocaleSetting = () => {
   )
 }
 
-/** 朗读音色：stella（海星，女声）/ tide（暗潮，男声） */
+/** 鏈楄闊宠壊锛歴tella锛堟捣鏄燂紝濂冲０锛? tide锛堟殫娼紝鐢峰０锛?*/
 const TtsVoiceSetting = () => {
   const t = useTranslate()
   const ttsVoice = useSettings((state) => state.ttsVoice)
@@ -968,7 +964,7 @@ const TtsVoiceSetting = () => {
   )
 }
 
-/** 覆盖导入的二次确认，叠在设置弹窗上 */
+/** 瑕嗙洊瀵煎叆鐨勪簩娆＄‘璁わ紝鍙犲湪璁剧疆寮圭獥涓?*/
 const ImportConfirm = ({
   historyImport,
 }: {
@@ -1015,8 +1011,8 @@ const themeOptions: { value: ThemePreference; label: TranslationKey; icon: React
 ]
 
 /**
- * 主题项：标题下方浅色 / 深色 / 跟随系统三个选块。
- * 与下方语言选项连续排列。
+ * 涓婚椤癸細鏍囬涓嬫柟娴呰壊 / 娣辫壊 / 璺熼殢绯荤粺涓変釜閫夊潡銆?
+ * 涓庝笅鏂硅瑷€閫夐」杩炵画鎺掑垪銆?
  */
 const ThemeSetting = () => {
   const t = useTranslate()
@@ -1047,10 +1043,10 @@ const ThemeSetting = () => {
   )
 }
 
-/** `reason` 为失败原因的文案 key，展示时按当前语言翻译后填入 `message` 参数。 */
+/** `reason` 涓哄け璐ュ師鍥犵殑鏂囨 key锛屽睍绀烘椂鎸夊綋鍓嶈瑷€缈昏瘧鍚庡～鍏?`message` 鍙傛暟銆?*/
 type Status = (TranslationMessage & { error?: boolean; reason?: TranslationKey }) | null
 
-/** 导出失败附带原因：预期的错误用对应文案作原因，其他错误用错误信息。 */
+/** 瀵煎嚭澶辫触闄勫甫鍘熷洜锛氶鏈熺殑閿欒鐢ㄥ搴旀枃妗堜綔鍘熷洜锛屽叾浠栭敊璇敤閿欒淇℃伅銆?*/
 const errorStatus = (key: TranslationKey, error: unknown): Status => ({
   key,
   ...(error instanceof BackupError
@@ -1090,7 +1086,7 @@ const SettingCell = ({
   )
 }
 
-/** 选文件后先提示覆盖；确认后才检查文件并执行导入，实时展示进度并反馈具体错误。 */
+/** 閫夋枃浠跺悗鍏堟彁绀鸿鐩栵紱纭鍚庢墠妫€鏌ユ枃浠跺苟鎵ц瀵煎叆锛屽疄鏃跺睍绀鸿繘搴﹀苟鍙嶉鍏蜂綋閿欒銆?*/
 const useHistoryImport = () => {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -1141,7 +1137,7 @@ const useHistoryImport = () => {
   return { file, busy, status, select: setFile, cancel: () => setFile(null), confirm }
 }
 
-/** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
+/** 瀵煎叆 = 瑕嗙洊锛氱敤閫変腑鏂囦欢鏇挎崲鏈湴鍏ㄩ儴浼氳瘽涓庨檮浠躲€?*/
 const ImportHistory = ({
   historyImport,
   disabled,
@@ -1188,7 +1184,7 @@ const ImportHistory = ({
   )
 }
 
-/** 将全部会话及图片导出为 ZIP 文件并下载 */
+/** 灏嗗叏閮ㄤ細璇濆強鍥剧墖瀵煎嚭涓?ZIP 鏂囦欢骞朵笅杞?*/
 const ExportHistory = ({ disabled }: { disabled: boolean }) => {
   const t = useTranslate()
   const empty = useChatStore((state) => state.sessions.length === 0)

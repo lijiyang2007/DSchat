@@ -840,3 +840,11 @@
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* 供应商列表上方的一句说明 */
+.providerIntro {
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}

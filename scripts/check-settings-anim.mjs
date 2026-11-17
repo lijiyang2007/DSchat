@@ -61,7 +61,7 @@ console.log('\n不破坏原有行为')
 check('Esc 逐级返回仍在', page.includes("event.key !== 'Escape'"))
 check('返回键逐级返回仍在', dialog.includes('closeSettingsSection()'))
 check('关闭仍走 closeSettings', dialog.includes('closeSettings()'))
-check('子页切换不丢 API Key 表单', dialog.includes('useApiKeyEditor()'))
+check('API Key 表单由供应商编辑页管理', read('src/components/settings/ProviderEditor.tsx').includes('useState<Provider>(provider)'))
 check('未用 window.setTimeout 全局', !/window\.setTimeout/.test(dialog))
 check('过渡只用 transform/opacity', !/animation:[^;]*\b(width|height|top|left|margin|padding)\b/.test(css))
 
