@@ -56,7 +56,13 @@ import { showToast } from '../base/toastState.js'
 import { useApiKeyEditor } from './ApiKeyField.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
-import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import {
+  closeSettings,
+  closeSettingsSection,
+  openSettingsSection,
+  useSettingsDialog,
+  type SettingsSection,
+} from './settingsDialogState.js'
 import { SettingsEntry, SettingsPage } from './SettingsPage.js'
 import styles from './Settings.module.css'
 
@@ -104,12 +110,15 @@ const sections: {
 const SettingsContent = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
-  // null 表示停留在设置主页（入口列表）；否则是正在查看的子页
-  const [opened, setOpened] = useState<SettingsSection | null>(() => {
-    const state = useSettingsDialog.getState()
-    // openSettings('model') 这类带目标的调用直接进子页；从侧边栏点进来先看列表
-    return state.targeted ? state.section : null
-  })
+  // 当前子页由 store 保存，返回键与 Esc 才能逐级返回
+  const opened = useSettingsDialog((state) => state.page)
+  const setOpened = (section: SettingsSection | null) => {
+    if (section === null) {
+      closeSettingsSection()
+    } else {
+      openSettingsSection(section)
+    }
+  }
   // 切换分组不丢失正在输入的 API Key 与导入状态
   const apiKeyEditor = useApiKeyEditor()
   const historyImport = useHistoryImport()

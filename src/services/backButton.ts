@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { useImageViewer, closeImageViewer } from '../components/messages/ImageViewer.js'
 import { closeSearchPanel, useSearchPanel } from '../components/search/searchPanelState.js'
-import { closeSettings, useSettingsDialog } from '../components/settings/settingsDialogState.js'
+import {
+  closeSettings,
+  handleSettingsBack,
+  useSettingsDialog,
+} from '../components/settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from '../components/sider/mobileSiderState.js'
 import { useChatStore, newChat } from './chat/store.js'
 
@@ -41,6 +45,10 @@ const handleBack = (): boolean => {
     return true
   }
   if (useSettingsDialog.getState().open) {
+    // 在子页时先退回设置主页；已经在主页才关闭整个设置
+    if (handleSettingsBack()) {
+      return true
+    }
     closeSettings()
     return true
   }
