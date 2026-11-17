@@ -64,6 +64,8 @@ export const en = {
   sessionSortByTitle: 'Title',
   accountLocalLabel: 'Local account',
   sessionGroupAll: 'All chats',
+  sessionGroupCollapse: 'Collapse {label}',
+  sessionGroupExpand: 'Expand {label}',
   sessionSearchClear: 'Clear search',
   sessionSearchNoResult: 'No matching chats',
   sessionItemMenuPinOption: 'Pin to top',

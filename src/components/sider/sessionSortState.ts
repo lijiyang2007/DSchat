@@ -43,3 +43,32 @@ export const sortSessions = (sessions: SessionSummary[], sort: SessionSort): Ses
   }
   return [...pinned.sort(compare), ...rest.sort(compare)]
 }
+
+/** 被收起的分组 key 集合；持久化到 localStorage，刷新后保持 */
+const COLLAPSED_KEY = 'chat-demo:collapsed-groups'
+
+const readCollapsed = (): string[] => {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+export const useCollapsedGroups = create(() => ({ keys: readCollapsed() }))
+
+export const isGroupCollapsed = (key: string): boolean =>
+  useCollapsedGroups.getState().keys.includes(key)
+
+export const toggleGroupCollapsed = (key: string) => {
+  const { keys } = useCollapsedGroups.getState()
+  const next = keys.includes(key) ? keys.filter((item) => item !== key) : [...keys, key]
+  useCollapsedGroups.setState({ keys: next })
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next))
+  } catch {
+    // 存储不可用时只在内存里生效
+  }
+}

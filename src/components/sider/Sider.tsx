@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconCheckOutline16,
+  IconChevronDownOutline14,
+  IconChevronRightOutline14,
   IconCloseFill14,
   IconPanelLeftOutline16,
   IconSearchOutline16,
@@ -22,7 +24,14 @@ import { showToast } from '../base/toastState.js'
 import { openSettingsHome } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
-import { setSessionSort, sortSessions, useSessionSort, type SessionSort } from './sessionSortState.js'
+import {
+  setSessionSort,
+  sortSessions,
+  toggleGroupCollapsed,
+  useCollapsedGroups,
+  useSessionSort,
+  type SessionSort,
+} from './sessionSortState.js'
 import styles from './Sider.module.css'
 
 /** 账号入口：把 API Key 打码后当作身份展示，没有 Key 时显示本地账户 */
@@ -47,6 +56,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const activeId = useChatStore((state) => state.activeId)
   const apiKey = useSettings((state) => state.apiKey)
   const sort = useSessionSort((state) => state.sort)
+  const collapsedKeys = useCollapsedGroups((state) => state.keys)
   const [now, setNow] = useState(Date.now)
   const ordered = useMemo(() => sortSessions(sessions, sort), [sessions, sort])
   // 只有按更新时间排时才按日期分组；换成标题/创建时间后日期不再单调，分组会碎成好几段
@@ -156,10 +166,25 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
               <div className={styles.searchEmpty}>{t('sessionSearchNoResult')}</div>
             )
           ) : (
-            groups.map((group, index) => (
+            groups.map((group, index) => {
+              const collapsed = collapsedKeys.includes(group.key)
+              return (
               <div key={group.key} className={styles.section}>
                 <div className={styles.sectionHeader}>
-                  <span className={styles.sectionLabel}>{group.label}</span>
+                  <button
+                    type="button"
+                    className={styles.sectionToggle}
+                    aria-expanded={!collapsed}
+                    aria-label={t(collapsed ? 'sessionGroupExpand' : 'sessionGroupCollapse', {
+                      label: group.label,
+                    })}
+                    onClick={() => toggleGroupCollapsed(group.key)}
+                  >
+                    <span className={styles.sectionChevron}>
+                      {collapsed ? <IconChevronRightOutline14 /> : <IconChevronDownOutline14 />}
+                    </span>
+                    <span className={styles.sectionLabel}>{group.label}</span>
+                  </button>
                   {index === 0 ? (
                     <Menu
                       options={sortOptions.map((option) => ({
@@ -183,16 +208,19 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
                     </Menu>
                   ) : null}
                 </div>
-                {group.sessions.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    active={session.id === activeId}
-                    onDelete={() => setDeleting(session)}
-                  />
-                ))}
+                {collapsed
+                  ? null
+                  : group.sessions.map((session) => (
+                      <SessionItem
+                        key={session.id}
+                        session={session}
+                        active={session.id === activeId}
+                        onDelete={() => setDeleting(session)}
+                      />
+                    ))}
               </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>

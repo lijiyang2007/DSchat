@@ -173,13 +173,13 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
           icon={<IconFollowsystemOutline16 />}
           title={t('settingsLocalePreference')}
           value={localeLabel}
-          onClick={() => open('general')}
+          onClick={() => open('language')}
         />
         <SettingsEntry
           icon={<IconVolumeOnOutline20 />}
           title={t('settingsTtsVoice')}
           value={voiceLabel}
-          onClick={() => open('general')}
+          onClick={() => open('voice')}
         />
       </SettingsGroup>
 
@@ -192,17 +192,17 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
               ? t('settingsHomeUpdateAvailable', { version: latest.version })
               : `v${versionInfo.versionName}`
           }
-          onClick={() => open('general')}
+          onClick={() => open('about')}
         />
         <SettingsEntry
           icon={<IconLinkOutline16 />}
           title={t('settingsHomeAgreementLabel')}
-          onClick={() => open('general')}
+          onClick={() => open('about')}
         />
         <SettingsEntry
           icon={<IconSearchOutline16 />}
           title={t('settingsHomeHelpLabel')}
-          onClick={() => open('general')}
+          onClick={() => open('about')}
         />
       </SettingsGroup>
     </>
@@ -349,7 +349,16 @@ const SettingsContent = () => {
   const current = opened
     ? (sections.find((item) => item.value === opened) ?? {
         value: opened,
-        label: opened === 'appearance' ? 'settingsAppearanceLabel' : 'settings',
+        label:
+          opened === 'appearance'
+            ? 'settingsAppearanceLabel'
+            : opened === 'language'
+              ? 'settingsLocalePreference'
+              : opened === 'voice'
+                ? 'settingsTtsVoice'
+                : opened === 'about'
+                  ? 'updateSectionLabel'
+                  : 'settings',
         desc: 'settingsPageSubtitle',
         icon: null,
       })
@@ -367,6 +376,16 @@ const SettingsContent = () => {
           <UpdateSetting />
         </>
       )
+    }
+    // 从首页直接点进来的单项设置页，只显示这一项，避免和「通用设置」重复
+    if (opened === 'language') {
+      return <LocaleSetting />
+    }
+    if (opened === 'voice') {
+      return <TtsVoiceSetting />
+    }
+    if (opened === 'about') {
+      return <UpdateSetting />
     }
     if (opened === 'model') {
       return <ModelSettings apiKeyEditor={apiKeyEditor} isMobile={isMobile} />

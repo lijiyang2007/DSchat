@@ -177,8 +177,12 @@ export type CreateMessageRequest = {
   system?: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
-  /** 思考强度；DeepSeek 原生协议支持，OpenAI 兼容路径会忽略 */
+  /** 思考强度（Anthropic / 原生协议写法） */
   output_config?: { effort: 'none' | 'low' | 'medium' | 'high' | 'max' }
+  /** 思考强度（OpenAI 兼容 /chat/completions 写法） */
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high' | 'max'
+  /** 思考强度（Responses API 写法，none 表示关闭思考） */
+  reasoning?: { effort: 'none' | 'low' | 'medium' | 'high' | 'max' }
   tools?: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
   safety_check?: { level: 'high' }
   temperature?: number

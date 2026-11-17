@@ -5,7 +5,8 @@ import { fetchWithDevProxy } from './api/origin.js'
 export const GITHUB_REPO = 'lijiyang2007/DSchat'
 export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`
 export const GITHUB_RELEASES_URL = `${GITHUB_REPO_URL}/releases`
-const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+/** 拉最近若干条 release，自己按版本号挑最大的（/latest 按创建时间排，顺序不可靠） */
+const RELEASES_LIST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=30`
 
 /**
  * GitHub 加速镜像。国内网络直连 api.github.com 常被阻断，
@@ -274,6 +275,34 @@ const parseGitHubRelease = (raw: unknown): ReleaseInfo | null => {
   }
 }
 
+/**
+ * 从 release 列表里挑版本号最大的那条。
+ * 跳过草稿和预发布；版本号比较用 compareVersions，不看发布时间。
+ */
+const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
+  if (!Array.isArray(raw)) {
+    return null
+  }
+  let best: ReleaseInfo | null = null
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) {
+      continue
+    }
+    const obj = item as Record<string, unknown>
+    if (obj.draft === true || obj.prerelease === true) {
+      continue
+    }
+    const parsed = parseGitHubRelease(obj)
+    if (!parsed) {
+      continue
+    }
+    if (!best || compareVersions(parsed.version, best.version) > 0) {
+      best = parsed
+    }
+  }
+  return best
+}
+
 /** 从 GitHub Releases 检查最新版本并获取更新公告 */
 export const checkForUpdates = async ({ manual = false } = {}): Promise<void> => {
   if (useUpdater.getState().checking) {
@@ -284,7 +313,7 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
   try {
     // 每个候选地址单独限时：镜像被墙时能尽快换下一个，而不是整体超时
     const response = await fetchFirstAvailable(
-      withMirrors(LATEST_RELEASE_API),
+      withMirrors(RELEASES_LIST_API),
       async (url) => {
         const controller = new AbortController()
         const timeout = window.setTimeout(() => controller.abort(), 8000)
@@ -322,7 +351,8 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
       throw new Error(`HTTP ${response.status}`)
     }
 
-    const release = parseGitHubRelease(await response.json())
+    // 多个版本都没更新时，只挑版本号最大的那一个，避免逐个弹窗
+    const release = pickHighestRelease(await response.json())
     if (!release) {
       throw new Error('Invalid release payload')
     }

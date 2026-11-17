@@ -212,6 +212,9 @@ export async function* streamOpenAIMessage(
     messages: toOpenAIMessages(body, inlineImages, inlineTexts),
     stream: true,
     stream_options: { include_usage: true },
+    // 思考开关与强度：OpenAI 格式用顶层 thinking + reasoning_effort
+    thinking: body.thinking,
+    ...(body.reasoning_effort ? { reasoning_effort: body.reasoning_effort } : {}),
     ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
     ...(body.top_p !== undefined ? { top_p: body.top_p } : {}),
     ...(body.max_tokens !== undefined ? { max_tokens: body.max_tokens } : {}),
@@ -371,6 +374,8 @@ export async function* streamResponsesMessage(
     input: toResponsesInput(body, inlineImages, inlineTexts),
     stream: true,
     store: false,
+    // 思考开关与强度：Responses 格式用 reasoning.effort，none 即关闭
+    ...(body.reasoning ? { reasoning: body.reasoning } : {}),
     ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
     ...(body.top_p !== undefined ? { top_p: body.top_p } : {}),
     ...(body.max_tokens !== undefined ? { max_output_tokens: body.max_tokens } : {}),

@@ -60,6 +60,8 @@ export const zh = {
   sessionSortByTitle: '按标题',
   accountLocalLabel: '本地账户',
   sessionGroupAll: '全部对话',
+  sessionGroupCollapse: '收起「{label}」',
+  sessionGroupExpand: '展开「{label}」',
   sessionSearchClear: '清空搜索',
   sessionSearchNoResult: '没有匹配的对话',
   sessionItemMenuPinOption: '置顶',

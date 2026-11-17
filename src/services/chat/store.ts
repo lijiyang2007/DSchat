@@ -705,6 +705,40 @@ const submitPrompt = (
  * 提交指定会话的最新草稿；null 表示新建会话。
  * 同步接收成功才清空草稿，附件原件由会话接管；保存失败仍通过保存入口重试。
  */
+/**
+ * 把界面的四档思考程度翻译成各协议真正认识的字段。
+ * - off  : 关闭思考（thinking.type = disabled / reasoning.effort = none）
+ * - low  : 轻度
+ * - high : 深度（服务端默认值）
+ * - max  : 最高
+ *
+ * 三种协议写法不同，之前只给 DeepSeek 原生协议发了 output_config，
+ * OpenAI 兼容与 Responses 路径完全没带，所以那两种接口下切换档位毫无效果。
+ */
+const EFFORT_MAP = {
+  off: 'none',
+  low: 'low',
+  high: 'high',
+  max: 'max',
+} as const
+
+const buildReasoningPayload = (
+  effort: 'off' | 'low' | 'high' | 'max',
+  protocol: 'deepseek' | 'openai' | 'responses' | 'local'
+): Pick<CreateMessageRequest, 'output_config' | 'reasoning_effort' | 'reasoning'> => {
+  const mapped = EFFORT_MAP[effort]
+  if (protocol === 'responses') {
+    // Responses API：reasoning.effort，none 即关闭
+    return { reasoning: { effort: mapped } }
+  }
+  if (protocol === 'openai' || protocol === 'local') {
+    // OpenAI 兼容：顶层 reasoning_effort；关闭时传 minimal（部分网关不接受 none）
+    return effort === 'off' ? {} : { reasoning_effort: mapped === 'none' ? 'low' : mapped }
+  }
+  // DeepSeek 原生（Anthropic 格式）：output_config.effort
+  return effort === 'off' ? {} : { output_config: { effort: mapped === 'none' ? 'low' : mapped } }
+}
+
 export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
@@ -1429,17 +1463,15 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           .filter(Boolean)
           .join('\n\n')
         const tools = serverTools(initial.search ?? false, settings.readUrl)
-        // 思考程度：off 关闭；其余映射到 DeepSeek 的 output_config.effort（仅原生协议支持）
+        // 思考程度：off 关闭思考；其余按协议把强度真正发给服务端
         const effort = settings.thinkingEffort
-        const thinkingEnabled = initial.thinking || effort !== 'off'
+        const thinkingEnabled = effort !== 'off'
         const requestBody: CreateMessageRequest = {
           model: initial.model ?? (settings.model.trim() || MODEL),
           ...(system ? { system } : {}),
           messages,
           thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },
-          ...(thinkingEnabled && effort !== 'off' && settings.chatProtocol === 'deepseek'
-            ? { output_config: { effort } }
-            : {}),
+          ...(thinkingEnabled ? buildReasoningPayload(effort, settings.chatProtocol) : {}),
           ...(settings.safetyCheck ? { safety_check: SAFETY_CHECK } : {}),
           ...(tools && tools.length > 0 ? { tools } : {}),
           ...(settings.temperature !== null ? { temperature: settings.temperature } : {}),

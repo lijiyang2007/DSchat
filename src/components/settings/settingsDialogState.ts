@@ -2,7 +2,15 @@ import { create } from 'zustand'
 import { useSettings } from '../../services/settings.js'
 
 /** 设置弹窗的分组：通用设置 / 模型与策略 / 长期记忆 / 数据管理 */
-export type SettingsSection = 'general' | 'appearance' | 'model' | 'memory' | 'data'
+export type SettingsSection =
+  | 'general'
+  | 'appearance'
+  | 'language'
+  | 'voice'
+  | 'about'
+  | 'model'
+  | 'memory'
+  | 'data'
 
 /**
  * 设置页导航状态。

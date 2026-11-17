@@ -181,6 +181,39 @@
   user-select: none;
 }
 
+/* 分组标题：整行可点，左侧箭头指示展开/收起 */
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  margin-left: -4px;
+  padding: 2px 4px 2px 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.sectionChevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .sectionLabel {
   min-width: 0;
   overflow: hidden;
