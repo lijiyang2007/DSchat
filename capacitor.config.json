@@ -1,0 +1,11 @@
+{
+  "appId": "com.dschat.app",
+  "appName": "DSchat",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

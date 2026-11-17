@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DSchat</string>
+    <string name="title_activity_main">DSchat</string>
+    <string name="package_name">com.dschat.app</string>
+    <string name="custom_url_scheme">com.dschat.app</string>
+</resources>
