@@ -1,4 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { accountToken } from '../account.js'
 import { fetchWithDevProxy, getApiOrigin } from './origin.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
@@ -81,12 +82,16 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => ({
-  // DeepSeek 兼容接口的鉴权方式，也可使用 Authorization: Bearer。
-  'x-api-key': apiKey,
-  // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
-  ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
-})
+const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => {
+  // 登录了 DeepSeek 账号时用账号 token（走账号额度），否则用 API Key。
+  // 官方 API 认 x-dsh-auth-token 这个头，和 DSH 桌面版用的是同一套。
+  const token = accountToken()
+  return {
+    ...(token ? { 'x-dsh-auth-token': token } : { 'x-api-key': apiKey }),
+    // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
+    ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
+  }
+}
 
 /** 用 GET /models 校验 API Key（不产生费用） */
 export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {

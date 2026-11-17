@@ -23,6 +23,7 @@ import {
   importHistory,
 } from '../../services/chat/backup.js'
 import { useIsMobile } from '../../app/viewport.js'
+import { signOut, startSignIn, useAccount } from '../../services/account.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -117,6 +118,64 @@ const sections: {
 ]
 
 /**
+ * 账号登录入口：未登录显示「登录 DeepSeek 账号」，登录后显示账号名与退出。
+ * 用的是平台 OAuth（和 DSH 桌面版同一套），token 走 x-dsh-auth-token 头。
+ */
+const AccountSignInEntry = () => {
+  const t = useTranslate()
+  const token = useAccount((state) => state.token)
+  const user = useAccount((state) => state.user)
+  const pending = useAccount((state) => state.pending)
+  const error = useAccount((state) => state.error)
+
+  const value = pending
+    ? t('accountSigningIn')
+    : token
+      ? user?.name || t('accountSignedIn')
+      : t('accountTokenInUse')
+
+  const onClick = () => {
+    if (token) {
+      signOut()
+      showToast({ key: 'accountSignOut' })
+      return
+    }
+    useAccount.setState({ pending: true, error: null })
+    void startSignIn()
+      .then((url) => {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      })
+      .catch((err: unknown) => {
+        useAccount.setState({
+          pending: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+  }
+
+  return (
+    <>
+      <SettingsEntry
+        icon={<IconDataOutline16 />}
+        title={token ? t('accountSignedIn') : t('accountSignIn')}
+        description={
+          error
+            ? t('accountSignInFailed', { message: error })
+            : token
+              ? t('accountTokenInUse')
+              : t('accountSignInDesc')
+        }
+        value={value}
+        onClick={onClick}
+      />
+      {pending ? (
+        <div className={styles.accountHint}>{t('accountSignInHint')}</div>
+      ) : null}
+    </>
+  )
+}
+
+/**
  * 设置首页：按「账户 / 应用 / 关于」分组的入口列表。
  * 每行右侧展示当前值（语言、外观、版本号等），点进去是详细设置。
  */
@@ -142,6 +201,7 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
   return (
     <>
       <SettingsGroup label={t('settingsGroupAccountLabel')}>
+        <AccountSignInEntry />
         <SettingsEntry
           icon={<IconDataOutline16 />}
           title={t('settingDialogAsideModelOptionLabel')}

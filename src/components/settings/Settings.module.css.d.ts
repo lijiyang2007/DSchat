@@ -41,6 +41,7 @@ declare const styles: {
   readonly fontSizeMarks: string
   readonly fontSizeMark: string
   readonly fontSizeMarkActive: string
+  readonly accountHint: string
   readonly resetRow: string
   readonly memoryAddRow: string
   readonly memoryAddInput: string

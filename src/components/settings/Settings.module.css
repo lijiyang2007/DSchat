@@ -826,3 +826,11 @@
   background-color: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
+
+/* 账号登录提示：等待浏览器授权时的说明行 */
+.accountHint {
+  padding: 4px 14px 12px 50px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}

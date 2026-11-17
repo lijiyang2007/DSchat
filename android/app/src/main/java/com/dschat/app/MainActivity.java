@@ -272,6 +272,54 @@ public class MainActivity extends BridgeActivity {
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
+        handleOAuthIntent(getIntent());
+    }
+
+    /**
+     * DeepSeek 账号登录回调：浏览器授权后跳回 dschat://oauth/callback?code=...，
+     * 这里把完整地址交给前端去换 token。
+     */
+    private void handleOAuthIntent(Intent intent) {
+        if (intent == null || intent.getData() == null) {
+            return;
+        }
+        Uri data = intent.getData();
+        if (!"dschat".equals(data.getScheme()) || !"oauth".equals(data.getHost())) {
+            return;
+        }
+        final String url = data.toString();
+        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView == null) {
+            return;
+        }
+        webView.post(() -> webView.evaluateJavascript(
+            "(function(){try{window.__DSCHAT_OAUTH_CALLBACK__ && window.__DSCHAT_OAUTH_CALLBACK__("
+                + jsString(url) + ")}catch(e){}})()",
+            null
+        ));
+    }
+
+    /** 把 Java 字符串转成 JS 字符串字面量 */
+    private static String jsString(String value) {
+        StringBuilder out = new StringBuilder("'");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\': out.append("\\\\"); break;
+                case '\'': out.append("\\'"); break;
+                case '\n': out.append("\\n"); break;
+                case '\r': out.append("\\r"); break;
+                default: out.append(c);
+            }
+        }
+        return out.append("'").toString();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleOAuthIntent(intent);
     }
 
     /**
