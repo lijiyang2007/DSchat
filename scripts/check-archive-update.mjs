@@ -86,13 +86,13 @@ check('安装前先判断已下载', /installDownloadedApk[\s\S]{0,300}hasDownlo
 check('弹窗显示已下载提示', updateModal.includes('updateDownloadedReady'))
 check('弹窗提供直接安装', updateModal.includes("t('updateActionInstallDownloaded')"))
 
-console.log('\n六、更新：快慢稳定（并发竞速 + 记忆镜像）')
+console.log('\n六、更新：快慢稳定（三路竞速 + 合法结果校验）')
 check('不再串行 for 循环', !updater.includes('fetchFirstAvailable'))
 check('改为并发竞速', /export const fetchFastest|const fetchFastest/.test(updater))
 check('同时发起所有候选', /for \(const url of urls\)[\s\S]{0,200}void run\(url\)/.test(updater))
-check('记住上次可用镜像', updater.includes('PREFERRED_MIRROR_KEY') && updater.includes('writePreferredMirror'))
-check('优先使用上次镜像', /withPreferredFirst/.test(updater))
-check('检查更新用竞速', /fetchFastest\(\s*withPreferredFirst/.test(updater))
+check('竞速三路来源（直连/jsDelivr/raw）', /'github-direct', 'jsdelivr', \.\.\.API_MIRRORS/.test(updater))
+check('竞速只收合法结果', /fetchFastest<ReleaseInfo>/.test(updater))
+check('raw 探针严格校验 name', /payload\.name !== 'dschat'/.test(updater))
 
 console.log('\n七、更新：断点续传与镜像顺序')
 check('原生支持 Range 续传', mainActivity.includes('setRequestProperty("Range"'))

@@ -152,8 +152,8 @@ check('保存时同步当前供应商协议', /draft\.id === activeProviderId[\s
 
 console.log('\n九、接入模型设置页')
 check('ModelSettings 使用 ProviderList', modelSettings.includes('<ProviderList'))
-check('ModelSettings 使用 ProviderEditor', modelSettings.includes('<ProviderEditor'))
-check('编辑时隐藏其余请求参数', /!editing \? \(/.test(modelSettings))
+check('设置对话框渲染 ProviderEditor 子页', read('src/components/settings/SettingsDialog.tsx').includes('<ProviderEditor'))
+check('编辑时进独立子页', /onEdit=\{openProviderEditor\}/.test(modelSettings) && /editingProviderId/.test(modelSettings))
 check('保留了协议选择', modelSettings.includes("t('chatProtocolLabel')"))
 check('保留了地址设置', modelSettings.includes("t('modelSettingsApiOriginLabel')"))
 check('保留了模型设置', modelSettings.includes("t('modelSettingsModelLabel')"))

@@ -66,8 +66,10 @@ import { showToast } from '../base/toastState.js'
 import { ContextUsage } from './ContextUsage.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
+import { ProviderEditor } from './ProviderEditor.js'
 import {
   closeSettings,
+  closeProviderEditor,
   closeSettingsSection,
   openSettingsSection,
   useSettingsDialog,
@@ -161,6 +163,8 @@ const AccountSignInEntry = () => {
   const user = useAccount((state) => state.user)
   const pending = useAccount((state) => state.pending)
   const error = useAccount((state) => state.error)
+  // 退出确认弹窗：登录态清掉就要重新走一遍浏览器授权，不能一键误触
+  const [confirming, setConfirming] = useState(false)
 
   const value = pending
     ? t('accountSigningIn')
@@ -170,8 +174,8 @@ const AccountSignInEntry = () => {
 
   const onClick = () => {
     if (token) {
-      signOut()
-      showToast({ key: 'accountSignOut' })
+      // 弹窗确认而不是直接退出
+      setConfirming(true)
       return
     }
     useAccount.setState({ pending: true, error: null })
@@ -185,6 +189,12 @@ const AccountSignInEntry = () => {
           error: err instanceof Error ? err.message : String(err),
         })
       })
+  }
+
+  const signOutConfirmed = () => {
+    setConfirming(false)
+    signOut()
+    showToast({ key: 'accountSignOut' })
   }
 
   return (
@@ -204,6 +214,29 @@ const AccountSignInEntry = () => {
       />
       {pending ? (
         <div className={styles.accountHint}>{t('accountSignInHint')}</div>
+      ) : null}
+      {confirming ? (
+        <Modal
+          title={t('accountSignOutConfirmTitle')}
+          className={styles.importConfirm}
+          onClose={() => setConfirming(false)}
+          footer={
+            <>
+              <Button variant="outlined" size="m" autoFocus onClick={() => setConfirming(false)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="dangerOutlined" size="m" onClick={signOutConfirmed}>
+                {t('accountSignOut')}
+              </Button>
+            </>
+          }
+        >
+          <div className={styles.importConfirmText}>
+            {t('accountSignOutConfirmDescription', {
+              account: user?.name || t('accountSignedIn'),
+            })}
+          </div>
+        </Modal>
       ) : null}
     </>
   )
@@ -471,18 +504,48 @@ const AppearanceSettings = () => {
   )
 }
 
+/**
+ * 供应商编辑子页的承载组件：按 id 从供应商列表里取当前项渲染编辑器。
+ * 保存或取消都调 onDone 退回模型页；供应商被删除时直接退出。
+ */
+const ProviderEditorPage = ({
+  providerId,
+  onDone,
+}: {
+  providerId: string
+  onDone: () => void
+}) => {
+  const provider = useSettings((state) =>
+    state.providers.find((item) => item.id === providerId)
+  )
+  if (!provider) {
+    // 供应商已不存在（被删除）：退回列表
+    onDone()
+    return null
+  }
+  return <ProviderEditor provider={provider} onSaved={onDone} onCancel={onDone} />
+}
+
 const SettingsContent = ({ closing }: { closing: boolean }) => {
   const t = useTranslate()
   // 褰撳墠瀛愰〉鐢?store 淇濆瓨锛岃繑鍥為敭涓?Esc 鎵嶈兘閫愮骇杩斿洖
   const opened = useSettingsDialog((state) => state.page)
+  // 供应商编辑子页（独立于 page 的一层）：null 表示不在编辑
+  const editingProviderId = useSettingsDialog((state) => state.editingProviderId)
   // 璁板綍鍒囨崲鏂瑰悜锛氳繘瀛愰〉浠庡彸渚ф粦鍏ワ紝杩斿洖涓婚〉浠庡乏渚ф粦鍏ャ€?
   // 鐢ㄤ笂涓€娆＄殑 page 鎺ㄥ锛屽畨鍗撹繑鍥為敭璧?store 涔熻兘鎷垮埌姝ｇ‘鏂瑰悜銆?
   // 鍦ㄦ覆鏌撴湡闂寸洿鎺ョ籂姝ｏ紙React 鍏佽鐨勮嚜绾犳鍐欐硶锛夛紝淇濊瘉棣栨鎻愪氦灏卞甫涓婃纭柟鍚戯紝涓嶄細鍏堟挱閿欏啀绾犳銆?
   const previousPage = useRef(opened)
+  const previousEditing = useRef<string | null>(null)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   if (previousPage.current !== opened) {
     previousPage.current = opened
     setDirection(opened === null ? 'back' : 'forward')
+  }
+  // 编辑子页进/出方向：进入从右滑来，保存/取消/返回键退回时从左滑来
+  if (previousEditing.current !== editingProviderId) {
+    previousEditing.current = editingProviderId
+    setDirection(editingProviderId === null ? 'back' : 'forward')
   }
   const setOpened = (section: SettingsSection | null) => {
     if (section === null) {
@@ -585,16 +648,30 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
   return (
     <>
       {current ? (
-        <SettingsPage
-          title={t(current.label)}
-          onBack={() => setOpened(null)}
-          onClose={close}
-          closing={closing}
-          navKey={current.value}
-          direction={direction}
-        >
-          {renderSection()}
-        </SettingsPage>
+        opened === 'model' && editingProviderId ? (
+          // 供应商编辑子页：独立页面，返回键/Esc/返回按钮都先回到模型页
+          <SettingsPage
+            title={t('providerEditorPageTitle')}
+            onBack={closeProviderEditor}
+            onClose={close}
+            closing={closing}
+            navKey={`provider-${editingProviderId}`}
+            direction={direction}
+          >
+            <ProviderEditorPage providerId={editingProviderId} onDone={closeProviderEditor} />
+          </SettingsPage>
+        ) : (
+          <SettingsPage
+            title={t(current.label)}
+            onBack={() => setOpened(null)}
+            onClose={close}
+            closing={closing}
+            navKey={current.value}
+            direction={direction}
+          >
+            {renderSection()}
+          </SettingsPage>
+        )
       ) : (
         <SettingsPage
           title={t('settings')}

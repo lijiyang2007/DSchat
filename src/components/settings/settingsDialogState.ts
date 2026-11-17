@@ -25,7 +25,21 @@ export const useSettingsDialog = create(() => ({
   targeted: false,
   /** 当前查看的子页；null 为设置主页 */
   page: null as SettingsSection | null,
+  /**
+   * 供应商编辑子页：正在编辑的供应商 id（null=不在编辑页）。
+   * 独立子页而不是模型页内嵌块：编辑页内容长，内嵌会把请求参数挤到很远的下面；
+   * 做成子页后返回键/Esc/返回按钮都按「编辑页 → 模型页 → …」逐级退。
+   */
+  editingProviderId: null as string | null,
 }))
+
+/** 进入某个供应商的编辑子页 */
+export const openProviderEditor = (id: string) =>
+  useSettingsDialog.setState({ editingProviderId: id })
+
+/** 关闭供应商编辑子页（保存或取消后调用） */
+export const closeProviderEditor = () =>
+  useSettingsDialog.setState({ editingProviderId: null })
 
 export const openSettings = (section: SettingsSection) =>
   useSettingsDialog.setState({ open: true, section, targeted: true, page: section })
@@ -36,22 +50,27 @@ export const openSettingsHome = () =>
 
 /** 进入某个子页 */
 export const openSettingsSection = (section: SettingsSection) =>
-  useSettingsDialog.setState({ page: section })
+  useSettingsDialog.setState({ page: section, editingProviderId: null })
 
 /** 从子页返回设置主页 */
 export const closeSettingsSection = () => useSettingsDialog.setState({ page: null })
 
 export const closeSettings = () =>
-  useSettingsDialog.setState({ open: false, targeted: false, page: null })
+  useSettingsDialog.setState({ open: false, targeted: false, page: null, editingProviderId: null })
 
 /**
  * 设置页的返回处理：在子页时回到列表并返回 true；
  * 已在列表页时返回 false，交给调用方决定是否关闭设置。
  */
 export const handleSettingsBack = (): boolean => {
-  const { open, page } = useSettingsDialog.getState()
+  const { open, page, editingProviderId } = useSettingsDialog.getState()
   if (!open) {
     return false
+  }
+  // 编辑子页在最上层：先退回模型页
+  if (page !== null && editingProviderId !== null) {
+    closeProviderEditor()
+    return true
   }
   if (page !== null) {
     closeSettingsSection()

@@ -370,7 +370,7 @@ export const initChat = (): Promise<void> => {
 }
 
 /** 同一会话合并并发读取；切换只改变 activeId，旧请求不会把界面切回去。 */
-const ensureSessionLoaded = (id: string): Promise<void> => {
+export const ensureSessionLoaded = (id: string): Promise<void> => {
   if (getSession(id)) {
     return Promise.resolve()
   }

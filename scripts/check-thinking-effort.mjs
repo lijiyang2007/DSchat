@@ -60,7 +60,7 @@ check('改用 releases 列表', updater.includes('RELEASES_LIST_API'))
 check('存在 pickHighestRelease', updater.includes('pickHighestRelease'))
 check('按版本号比较而非时间', /compareVersions\(parsed\.version, best\.version\) > 0/.test(updater))
 check('跳过草稿与预发布', updater.includes('obj.draft === true') && updater.includes('obj.prerelease === true'))
-check('解析走 pickHighestRelease', updater.includes('pickHighestRelease(await response.json())'))
+check('解析走 pickHighestRelease', updater.includes('pickHighestRelease(await attempt.json())'))
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

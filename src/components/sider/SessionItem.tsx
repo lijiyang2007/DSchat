@@ -10,6 +10,7 @@ import {
   IconTrashOutline16,
 } from '../base/icons.js'
 import {
+  ensureSessionLoaded,
   renameSession,
   selectSession,
   setSessionArchived,
@@ -41,6 +42,13 @@ export const SessionItem = memo(function SessionItem({
   const [menuOpen, setMenuOpen] = useState(false)
   const [usageOpen, setUsageOpen] = useState(false)
   const displayTitle = session.title || t('untitledChat')
+
+  // 会话是懒加载的：从菜单看一个没打开过的会话时缓存里还没有消息，
+  // 先触发加载再显示弹窗，否则会误报「当前对话为空」
+  const openUsage = () => {
+    setUsageOpen(true)
+    void ensureSessionLoaded(session.id)
+  }
 
   if (editing) {
     const finish = (title: string) => {
@@ -94,7 +102,7 @@ export const SessionItem = memo(function SessionItem({
               icon: <IconThinkOutline16 />,
               onSelect: () => {
                 setMenuOpen(false)
-                setUsageOpen(true)
+                openUsage()
               },
             },
             {

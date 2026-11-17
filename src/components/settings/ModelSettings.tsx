@@ -48,7 +48,10 @@ import {
   CapabilityChannelCard,
   ModelFetcherInput,
 } from './ChannelConfigField.js'
-import { ProviderEditor } from './ProviderEditor.js'
+import {
+  openProviderEditor,
+  useSettingsDialog,
+} from './settingsDialogState.js'
 import { ProviderList } from './ProviderList.js'
 import styles from './Settings.module.css'
 
@@ -300,14 +303,10 @@ export const ModelSettings = () => {
   const [snippetOpen, setSnippetOpen] = useState(false)
   const [snippetText, setSnippetText] = useState('')
   const [snippetStatus, setSnippetStatus] = useState<{ text: string; error?: boolean } | null>(null)
-  // 正在编辑的供应商 id；null 表示看列表
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // 编辑跳到独立子页（SettingsDialog 渲染），这里只感知状态来隐藏请求参数区
+  const editingId = useSettingsDialog((state) => state.editingProviderId)
   const mainBaseUrl = settings.apiOrigin.trim() || getApiOrigin()
   const mainApiKey = settings.apiKey ?? ''
-
-  const editing = editingId
-    ? (settings.providers.find((item) => item.id === editingId) ?? null)
-    : null
 
   const protocolOptions: SelectOption<ChatProtocol>[] = [
     { value: 'deepseek', label: t('chatProtocolDeepSeek') },
@@ -320,23 +319,14 @@ export const ModelSettings = () => {
     <>
       <div className={styles.groupTitle}>{t('modelSettingsSectionRequest')}</div>
 
-      {/* 供应商：列表 ↔ 编辑，每加一个向下追加一格 */}
-      {editing ? (
-        <div className={styles.cell}>
-          <ProviderEditor
-            provider={editing}
-            onSaved={() => setEditingId(null)}
-            onCancel={() => setEditingId(null)}
-          />
-        </div>
-      ) : (
-        <div className={styles.cell}>
-          <div className={styles.providerIntro}>{t('providerListHint')}</div>
-          <ProviderList onEdit={setEditingId} />
-        </div>
-      )}
+      {/* 供应商列表：点「编辑」进独立子页，保存/取消后返回这里 */}
+      <div className={styles.cell}>
+        <div className={styles.providerIntro}>{t('providerListHint')}</div>
+        <ProviderList onEdit={openProviderEditor} />
+      </div>
 
-      {!editing ? (
+      {/* 编辑子页打开时隐藏其余请求参数：视线集中在正在编辑的供应商上 */}
+      {!editingId ? (
         <>
           <div className={styles.cell}>
             <div className={styles.field}>

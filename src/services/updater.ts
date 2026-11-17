@@ -17,19 +17,29 @@ const RELEASES_LIST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases?
  * 是「查更新」最可靠的一条路；拿不到 release 正文，但版本号够用。
  */
 const JSDELIVR_API = `https://data.jsdelivr.com/v1/packages/gh/${GITHUB_REPO}`
+/**
+ * raw.githubusercontent.com 上的 package.json 兜底探针。
+ * jsDelivr 偶发抽风时走镜像代理读取（2026-11 实测 ghfast.top 约 1 秒返回）。
+ */
+const RAW_PACKAGE_JSON = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/package.json`
 
-/** 查 release 元数据用的镜像（实测能透传 api.github.com） */
+/**
+ * 镜像按用途分组：
+ * - API_MIRRORS 只用于代理 raw.githubusercontent.com 的版本探针（实测能透传）。
+ *   注意不能再拿它们代理 api.github.com：2026-11 实测 gh-proxy.net 对 API 返回
+ *   200 + 广告跳转页（垃圾数据会赢下竞速），ghfast.top 返回 403，gh-proxy.com 已下线。
+ * - DOWNLOAD_MIRRORS 只用于 release 资产（APK）下载，实测能透传 assets。
+ * 两组列表都按实测可用性维护，顺序即优先级。
+ */
 export const API_MIRRORS = [
-  'https://gh-proxy.net/',
-  'https://gh-proxy.com/',
   'https://ghfast.top/',
+  'https://ghproxy.net/',
 ]
 
 /** 下载 APK 用的镜像（实测能透传 release 资源） */
 export const DOWNLOAD_MIRRORS = [
   'https://ghfast.top/',
   'https://ghproxy.net/',
-  'https://gh-proxy.net/',
 ]
 
 /** 兼容旧名字：浏览器兜底下载用下载类镜像 */
@@ -76,37 +86,6 @@ const fetchFastest = async <T>(
       )
     }
   })
-}
-
-/**
- * 上次成功的镜像。下次优先用它，正常情况下第一次请求就命中，
- * 不用再等竞速，进一步把常见路径压到一次往返。
- */
-const PREFERRED_MIRROR_KEY = 'chat-demo:update-mirror'
-
-const readPreferredMirror = (): string => {
-  try {
-    return localStorage.getItem(PREFERRED_MIRROR_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-const writePreferredMirror = (url: string) => {
-  try {
-    localStorage.setItem(PREFERRED_MIRROR_KEY, url)
-  } catch {
-    // 忽略本地存储失败
-  }
-}
-
-/** 把上次命中的地址排到最前面，其余保持原顺序 */
-const withPreferredFirst = (urls: string[]): string[] => {
-  const preferred = readPreferredMirror()
-  if (!preferred || !urls.includes(preferred)) {
-    return urls
-  }
-  return [preferred, ...urls.filter((url) => url !== preferred)]
 }
 
 const SKIPPED_VERSION_KEY = 'chat-demo:skipped-update-version'
@@ -367,11 +346,36 @@ const fetchFromJsdelivr = async (signal: AbortSignal): Promise<ReleaseInfo | nul
     return null
   }
   const highest = versions.reduce((a, b) => (compareVersions(a, b) > 0 ? a : b))
-  const tag = `v${highest}`
+  return minimalReleaseInfo(highest)
+}
+
+/**
+ * 镜像代理 raw.githubusercontent.com 上的 package.json 读版本号。
+ * 2026-11 实测：api.github.com 被各镜像挡死（广告页/403），但 raw 能透传，
+ * ghfast.top 约 1 秒返回。严格校验 JSON 与 name 字段，拒绝广告跳转页。
+ */
+const fetchFromRawMirror = async (url: string, signal: AbortSignal): Promise<ReleaseInfo | null> => {
+  const response = await fetchWithDevProxy(url, { signal })
+  if (!response.ok) {
+    return null
+  }
+  const payload = (await response.json()) as { name?: string; version?: string }
+  // name 校验是关键：镜像抽风时返回的是 HTML/跳转页，JSON.parse 直接失败；
+  // 就算碰巧解析成功，name 不对也说明这不是本仓库的 package.json
+  if (payload.name !== 'dschat' || typeof payload.version !== 'string') {
+    return null
+  }
+  const version = payload.version.trim()
+  return /^\d+\.\d+\.\d+/.test(version) ? minimalReleaseInfo(version) : null
+}
+
+/** 用版本号构造一份最小可用的 ReleaseInfo（下载地址按 GitHub 约定拼，走下载镜像） */
+const minimalReleaseInfo = (version: string): ReleaseInfo => {
+  const tag = `v${version}`
   return {
-    version: highest,
+    version,
     tagName: tag,
-    title: `v${highest}`,
+    title: `v${version}`,
     body: '',
     publishedAt: '',
     htmlUrl: `${GITHUB_REPO_URL}/releases/tag/${tag}`,
@@ -409,6 +413,28 @@ const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
   return best
 }
 
+/**
+ * 应用一次检查结果（统一三路来源的落库逻辑）。
+ * @returns 是否成功拿到 release 信息
+ */
+const applyReleaseResult = (release: ReleaseInfo, manual: boolean): boolean => {
+  const current = getCurrentAppVersion()
+  const hasUpdate = compareVersions(release.version, current.versionName) > 0
+  const skipped = readSkippedVersion()
+  useUpdater.setState({
+    checking: false,
+    latest: release,
+    hasUpdate,
+    lastCheckedAt: Date.now(),
+    error: null,
+    modalOpen: hasUpdate && (manual || skipped !== release.version),
+  })
+  if (manual && !hasUpdate) {
+    showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
+  }
+  return true
+}
+
 /** 从 GitHub Releases 检查最新版本并获取更新公告 */
 export const checkForUpdates = async ({ manual = false } = {}): Promise<void> => {
   if (useUpdater.getState().checking) {
@@ -416,96 +442,73 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
   }
   useUpdater.setState({ checking: true, error: null })
 
-  try {
-    // 并发竞速：耗时取决于最快的那条路，不再被前面不通的镜像拖成十几秒
-    const { value: response, url: hitUrl } = await fetchFastest(
-      withPreferredFirst(withMirrors(RELEASES_LIST_API, API_MIRRORS)),
-      async (url) => {
-        const controller = new AbortController()
-        const timeout = window.setTimeout(() => controller.abort(), 5000)
-        try {
-          const attempt = await fetchWithDevProxy(url, {
+  /**
+   * 三路并发竞速，谁先给出**合法结果**谁赢：
+   * 1) api.github.com 直连（有完整更新公告，能直连时优先）
+   * 2) jsDelivr 版本清单（国内可直连，最稳）
+   * 3) 镜像代理 raw package.json（前两条都挂时的兜底）
+   *
+   * 关键：竞速只收「解析成功且校验通过」的结果。2026-11 实测 gh-proxy.net
+   * 对 GitHub API 返回 200 + 广告跳转页——如果按「HTTP 200 就赢」判定，
+   * 垃圾页会赢下竞速并污染镜像记忆，这正是旧版「检查更新失效」的根源。
+   */
+  const current = getCurrentAppVersion()
+  const release = await fetchFastest<ReleaseInfo>(
+    ['github-direct', 'jsdelivr', ...API_MIRRORS.map((m) => `raw:${m}`)],
+    async (route) => {
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 8000)
+      try {
+        if (route === 'github-direct') {
+          // 直连 GitHub API：404 视为「仓库还没有 release」，直接给空结果
+          const attempt = await fetchWithDevProxy(RELEASES_LIST_API, {
             headers: { Accept: 'application/vnd.github+json' },
             signal: controller.signal,
           })
-          // 404 也直接返回：镜像对不存在的仓库同样返回 404，交给下面统一处理
-          if (!attempt.ok && attempt.status !== 404) {
+          if (attempt.status === 404) {
+            return minimalReleaseInfo(current.versionName)
+          }
+          if (!attempt.ok) {
             throw new Error(`HTTP ${attempt.status}`)
           }
-          return attempt
-        } finally {
-          window.clearTimeout(timeout)
+          const release = pickHighestRelease(await attempt.json())
+          if (!release) {
+            throw new Error('Invalid release payload')
+          }
+          return release
         }
+        if (route === 'jsdelivr') {
+          const release = await fetchFromJsdelivr(controller.signal)
+          if (!release) {
+            throw new Error('jsDelivr payload invalid')
+          }
+          return release
+        }
+        // raw:<mirror> —— 镜像代理 package.json
+        const release = await fetchFromRawMirror(
+          `${route.slice(4)}${RAW_PACKAGE_JSON}`,
+          controller.signal
+        )
+        if (!release) {
+          throw new Error('raw probe payload invalid')
+        }
+        return release
+      } finally {
+        window.clearTimeout(timeout)
       }
-    )
-    // 记住这次命中的镜像，下次优先用它
-    writePreferredMirror(hitUrl)
-
-    if (response.status === 404) {
-      useUpdater.setState({
-        checking: false,
-        latest: null,
-        hasUpdate: false,
-        lastCheckedAt: Date.now(),
-        error: null,
-      })
-      if (manual) {
-        showToast({ key: 'updateNoReleasesToast' })
-      }
-      return
     }
+  )
+    .then(({ value }) => value)
+    .catch(() => null)
+  if (release) {
+    applyReleaseResult(release, manual)
+    return
+  }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    // 多个版本都没更新时，只挑版本号最大的那一个，避免逐个弹窗
-    const release = pickHighestRelease(await response.json())
-    if (!release) {
-      throw new Error('Invalid release payload')
-    }
-
-    const current = getCurrentAppVersion()
-    const hasUpdate = compareVersions(release.version, current.versionName) > 0
-    const skipped = readSkippedVersion()
-
-    useUpdater.setState({
-      checking: false,
-      latest: release,
-      hasUpdate,
-      lastCheckedAt: Date.now(),
-      error: null,
-      modalOpen: hasUpdate && (manual || skipped !== release.version),
-    })
-
-    if (manual && !hasUpdate) {
-      showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
-    }
-  } catch (error) {
-    // GitHub 和镜像全都不通时，最后试一次 jsDelivr（国内可直连）
-    const fallback = await fetchFromJsdelivr(AbortSignal.timeout(8000)).catch(() => null)
-    if (fallback) {
-      const current = getCurrentAppVersion()
-      const hasUpdate = compareVersions(fallback.version, current.versionName) > 0
-      const skipped = readSkippedVersion()
-      useUpdater.setState({
-        checking: false,
-        latest: fallback,
-        hasUpdate,
-        lastCheckedAt: Date.now(),
-        error: null,
-        modalOpen: hasUpdate && (manual || skipped !== fallback.version),
-      })
-      if (manual && !hasUpdate) {
-        showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
-      }
-      return
-    }
-    const message = error instanceof Error ? error.message : String(error)
-    useUpdater.setState({ checking: false, error: message })
-    if (manual) {
-      showToast({ type: 'error', key: 'updateCheckFailedToast', params: { message } })
-    }
+  const message = '所有更新通道都不可用（GitHub 直连、jsDelivr、镜像探针均失败）'
+  useUpdater.setState({ checking: false, error: message })
+  if (manual) {
+    showToast({ type: 'error', key: 'updateCheckFailedToast', params: { message } })
   }
 }
 

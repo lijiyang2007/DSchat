@@ -284,6 +284,13 @@ public class MainActivity extends BridgeActivity {
                             }
                             fileOut.flush();
                         }
+                        // APK 是 zip，必须以 PK\x03\x04 开头。部分镜像挂掉时会返回
+                        // 200 + 广告跳转页，旧版把它当成安装包存下来，安装必失败还占着缓存。
+                        // 校验魔数，不对就当这次下载失败，换下一个镜像。
+                        if (!looksLikeApk(tempFile)) {
+                            tempFile.delete();
+                            throw new IOException("Not a valid APK payload");
+                        }
                         if (finalFile.exists()) {
                             finalFile.delete();
                         }
@@ -302,9 +309,12 @@ public class MainActivity extends BridgeActivity {
                             break;
                         }
                         lastError = e.getMessage() != null ? e.getMessage() : "Download failed";
-                        // 保留 .part 以便换镜像后续传；只有内容确实不可用才清掉
-                        if (tempFile.exists() && tempFile.length() == 0) {
-                            tempFile.delete();
+                        // 保留 .part 以便换镜像后续传；内容不可用（垃圾页/空文件）时清掉
+                        if (tempFile.exists()) {
+                            long len = tempFile.length();
+                            if (len == 0 || !looksLikeApk(tempFile)) {
+                                tempFile.delete();
+                            }
                         }
                         updateProgress = 0;
                     } finally {
@@ -336,6 +346,19 @@ public class MainActivity extends BridgeActivity {
                 + ",\"apkName\":\"" + escapeJson(downloadedApkName) + "\""
                 + ",\"hasDownloadedFile\":" + (downloadedApkFile != null && downloadedApkFile.exists())
                 + "}";
+        }
+
+        /** 检查文件开头是不是 APK/zip 的魔数 PK\x03\x04，挡住镜像返回的广告页 */
+        private static boolean looksLikeApk(File file) {
+            try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+                if (raf.length() < 4) {
+                    return false;
+                }
+                return raf.read() == 0x50 && raf.read() == 0x4B
+                    && raf.read() == 0x03 && raf.read() == 0x04;
+            } catch (Exception e) {
+                return false;
+            }
         }
 
         /** 已经下好、直接装（不再重下） */
