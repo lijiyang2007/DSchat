@@ -204,6 +204,10 @@ export const en = {
   modelSettingsAutoCompactLabel: 'Automatic context compaction',
   modelSettingsAutoCompactDesc:
     'When the conversation nears the model context window (~80%), earlier turns are summarized so long chats can continue. Local history stays intact and remains scrollable',
+  contextUsageLabel: 'Context {percent}%',
+  contextUsageHint: 'This chat uses {percent}% of the context window; {compacted}',
+  contextUsageAuto: 'earlier turns are compacted automatically at 80%',
+  contextUsageManual: 'auto compaction is off; nearing the limit may cause errors',
   contextCompactedToast: 'Context compacted: earlier turns were summarized',
   contextCompactedBanner: 'Earlier turns were compacted into a summary; local history is intact',
   contextCompactedBannerExpanded: '{summary}',
@@ -231,6 +235,12 @@ export const en = {
   modelSettingsTopPLabel: 'Top P',
   modelSettingsMaxTokensLabel: 'Max Tokens',
   modelSettingsParamPlaceholder: 'Default',
+  modelSettingsStreamThrottleLabel: 'Streaming output',
+  modelSettingsStreamThrottleDesc:
+    'Smooth: fewer renders, better on slow devices; Balanced: default; Full: show every character, may stutter on weak devices',
+  streamThrottleSmooth: 'Smooth',
+  streamThrottleBalanced: 'Balanced',
+  streamThrottleFull: 'Full',
   modelSettingsThinkingEffortLabel: 'Thinking effort',
   modelSettingsThinkingEffortDesc:
     'Off answers directly; higher values reason more deeply and cost more time and tokens. Applies to the native DeepSeek protocol only',

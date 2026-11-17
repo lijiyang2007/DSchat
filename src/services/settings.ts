@@ -22,6 +22,9 @@ export const CONTEXT_WINDOW_PRESETS = [
 /** 模型是否支持看图 */
 export type VisionSupport = 'auto' | 'yes' | 'no'
 
+/** 流式输出节流：流畅=丢帧多渲染快，完整=尽量显示每个字 */
+export type StreamThrottle = 'smooth' | 'balanced' | 'full'
+
 /** 子能力渠道模式：inherit 跟随主 DeepSeek 服务，custom 使用独立的别家服务 */
 export type ServiceChannelMode = 'inherit' | 'custom'
 
@@ -82,6 +85,8 @@ export type Settings = {
   contextWindow: number
   /** 该模型能否直接识别图片；auto 表示按模型名自动判断 */
   visionSupport: VisionSupport
+  /** 流式输出的节流强度 */
+  streamThrottle: StreamThrottle
   // 多能力独立渠道
   asrChannel: ServiceChannelConfig
   ttsChannel: TtsChannelConfig
@@ -132,6 +137,7 @@ const KEYS = {
   maxTokens: 'chat-demo:max-tokens',
   contextWindow: 'chat-demo:context-window',
   visionSupport: 'chat-demo:vision-support',
+  streamThrottle: 'chat-demo:stream-throttle',
   asrChannel: 'chat-demo:asr-channel',
   ttsChannel: 'chat-demo:tts-channel',
   visionChannel: 'chat-demo:vision-channel',
@@ -278,6 +284,11 @@ const initialVisionSupport = (): VisionSupport => {
   return saved === 'yes' || saved === 'no' ? saved : 'auto'
 }
 
+const initialStreamThrottle = (): StreamThrottle => {
+  const saved = read(KEYS.streamThrottle)
+  return saved === 'smooth' || saved === 'full' ? saved : 'balanced'
+}
+
 const initialChatProtocol = (): ChatProtocol => {
   const saved = read(KEYS.chatProtocol)
   if (saved === 'openai' || saved === 'responses' || saved === 'local') {
@@ -317,6 +328,7 @@ export const useSettings = create<Settings>(() => ({
     Math.round(readNumber(KEYS.contextWindow) ?? 128000)
   ),
   visionSupport: initialVisionSupport(),
+  streamThrottle: initialStreamThrottle(),
   asrChannel: readChannel(KEYS.asrChannel),
   ttsChannel: readTtsChannel(KEYS.ttsChannel),
   visionChannel: readChannel(KEYS.visionChannel),
@@ -400,6 +412,11 @@ export const setContextWindow = (value: number) => {
 export const setVisionSupport = (visionSupport: VisionSupport) => {
   write(KEYS.visionSupport, visionSupport)
   useSettings.setState({ visionSupport })
+}
+
+export const setStreamThrottle = (streamThrottle: StreamThrottle) => {
+  write(KEYS.streamThrottle, streamThrottle)
+  useSettings.setState({ streamThrottle })
 }
 
 export const setSearch = (search: boolean) => {
@@ -545,6 +562,7 @@ export const resetModelAndPolicySettings = () => {
   setThinkingEffort('off')
   setContextWindow(128000)
   setVisionSupport('auto')
+  setStreamThrottle('balanced')
   setTemperature(null)
   setTopP(null)
   setMaxTokens(null)

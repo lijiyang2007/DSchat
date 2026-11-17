@@ -194,6 +194,10 @@ export const zh = {
   modelSettingsAutoCompactLabel: '上下文自动压缩',
   modelSettingsAutoCompactDesc:
     '对话接近模型上下文窗口（约 80%）时，自动把较早轮次总结成摘要，让长对话可以一直继续；本地记录完整保留，可向上翻阅',
+  contextUsageLabel: '上下文 {percent}%',
+  contextUsageHint: '当前对话占用上下文 {percent}%；{compacted}',
+  contextUsageAuto: '到 80% 会自动压缩较早内容',
+  contextUsageManual: '未开启自动压缩，接近上限可能报错',
   contextCompactedToast: '上下文已自动压缩，较早内容已总结为摘要',
   contextCompactedBanner: '较早的对话已压缩为摘要，本地记录仍然完整',
   contextCompactedBannerExpanded: '{summary}',
@@ -220,6 +224,12 @@ export const zh = {
   modelSettingsTopPLabel: 'Top P',
   modelSettingsMaxTokensLabel: 'Max Tokens',
   modelSettingsParamPlaceholder: '跟随默认',
+  modelSettingsStreamThrottleLabel: '流式输出',
+  modelSettingsStreamThrottleDesc:
+    '流畅：减少渲染次数，弱机上更顺滑；均衡：默认；完整：尽量显示每个字，低配设备可能卡顿',
+  streamThrottleSmooth: '流畅',
+  streamThrottleBalanced: '均衡',
+  streamThrottleFull: '完整',
   modelSettingsThinkingEffortLabel: '思考程度',
   modelSettingsThinkingEffortDesc:
     '关闭后直接作答；越高越愿意深入推理，耗时与消耗也越多。仅 DeepSeek 原生接口生效',

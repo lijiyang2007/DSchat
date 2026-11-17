@@ -29,6 +29,7 @@ import {
   setRefusalMessage,
   setSafetyCheck,
   setSendLatestReminder,
+  setStreamThrottle,
   setSystemPrompt,
   setThinkingEffort,
   setVisionSupport,
@@ -38,6 +39,7 @@ import {
   setVisionChannel,
   useSettings,
   type ChatProtocol,
+  type StreamThrottle,
   type ThinkingEffort,
   type VisionSupport,
 } from '../../services/settings.js'
@@ -68,6 +70,15 @@ const thinkingEffortOptions = (t: Translate) =>
       ['medium', 'thinkingEffortMedium'],
       ['high', 'thinkingEffortHigh'],
       ['max', 'thinkingEffortMax'],
+    ] as const
+  ).map(([value, key]) => ({ value, label: t(key as never) }))
+
+const streamThrottleOptions = (t: Translate) =>
+  (
+    [
+      ['smooth', 'streamThrottleSmooth'],
+      ['balanced', 'streamThrottleBalanced'],
+      ['full', 'streamThrottleFull'],
     ] as const
   ).map(([value, key]) => ({ value, label: t(key as never) }))
 
@@ -514,6 +525,19 @@ export const ModelSettings = ({
             />
           </div>
           <div className={styles.description}>{t('modelSettingsParamHint')}</div>
+        </div>
+      </div>
+
+      <div className={styles.cell}>
+        <div className={styles.field}>
+          <div className={styles.label}>{t('modelSettingsStreamThrottleLabel')}</div>
+          <div className={styles.description}>{t('modelSettingsStreamThrottleDesc')}</div>
+          <Select
+            value={settings.streamThrottle}
+            options={streamThrottleOptions(t)}
+            ariaLabel={t('modelSettingsStreamThrottleLabel')}
+            onChange={(value) => setStreamThrottle(value as StreamThrottle)}
+          />
         </div>
       </div>
 

@@ -64,3 +64,9 @@
   flex-shrink: 0;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* 长会话虚拟化：视口外消息跳过渲染，估算高度稳定滚动条 */
+.virtualItem {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+}

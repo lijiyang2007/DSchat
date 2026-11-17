@@ -33,6 +33,8 @@ import styles from './MessageList.module.css'
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
+/** 消息数超过这个值时启用视口外跳过渲染，避免长会话卡顿 */
+const VIRTUALIZE_THRESHOLD = 30
 
 export const MessageList = ({
   session,
@@ -144,6 +146,11 @@ export const MessageList = ({
 
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
+  // 关闭虚拟化的场景：正在流式输出（末尾消息需实时刷新）或消息太少
+  const virtualize = messages.length > VIRTUALIZE_THRESHOLD && !streaming
+  // 每条消息外层：视口外时用 content-visibility 跳过渲染，
+  // contain-intrinsic-size 给出估算高度让滚动条保持稳定。
+  const itemClass = virtualize ? styles.virtualItem : undefined
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
@@ -170,6 +177,7 @@ export const MessageList = ({
             ) : null}
             {messages.map((message, index) =>
               message.role === 'user' ? (
+                <div key={message.id} className={itemClass}>
                 <UserMessage
                   key={message.id}
                   sessionId={session.id}
@@ -181,7 +189,9 @@ export const MessageList = ({
                   versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                   onSelectVersion={selectVersion}
                 />
+                </div>
               ) : (
+                <div key={message.id} className={itemClass}>
                 <AssistantMessage
                   key={message.id}
                   sessionId={session.id}
@@ -192,6 +202,7 @@ export const MessageList = ({
                   versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                   onSelectVersion={selectVersion}
                 />
+                </div>
               )
             )}
           </div>
