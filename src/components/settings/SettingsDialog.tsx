@@ -23,6 +23,7 @@ import {
   importHistory,
 } from '../../services/chat/backup.js'
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
+import { formatBalance, refreshBalance, useBalance } from '../../services/balance.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -165,17 +166,40 @@ const AccountSignInEntry = () => {
   const error = useAccount((state) => state.error)
   // 退出确认弹窗：登录态清掉就要重新走一遍浏览器授权，不能一键误触
   const [confirming, setConfirming] = useState(false)
+  // 账号余额：登录后自动查一次，点条目刷新
+  const balance = useBalance()
+  useEffect(() => {
+    if (token) {
+      void refreshBalance()
+    } else {
+      // 退出后清掉余额展示
+      useBalance.setState({ loading: false, available: null, info: null, error: null, fetchedAt: null })
+    }
+  }, [token])
 
-  const value = pending
+  const balanceText = formatBalance(balance)
+  const balanceValue = pending
     ? t('accountSigningIn')
     : token
       ? user?.name || t('accountSignedIn')
       : t('accountTokenInUse')
+  const balanceDescription = token
+    ? balance.loading
+      ? t('accountBalanceLoading')
+      : balance.error === 'token_expired'
+        ? t('accountTokenInUse')
+        : balance.info
+          ? t('accountBalanceValue', {
+              balance: balanceText ?? '',
+              granted: balance.info.grantedBalance.toFixed(2),
+            })
+          : t('accountBalanceUnavailable')
+    : t('accountSignInDesc')
 
   const onClick = () => {
     if (token) {
-      // 弹窗确认而不是直接退出
-      setConfirming(true)
+      // 点已登录条目 = 刷新余额；长按/编辑语义由确认弹窗承载——先刷新，退出仍走弹窗
+      void refreshBalance()
       return
     }
     useAccount.setState({ pending: true, error: null })
@@ -205,13 +229,14 @@ const AccountSignInEntry = () => {
         description={
           error
             ? t('accountSignInFailed', { message: error })
-            : token
-              ? t('accountTokenInUse')
-              : t('accountSignInDesc')
+            : balanceDescription
         }
-        value={value}
+        value={balanceValue}
         onClick={onClick}
       />
+      {token ? (
+        <div className={styles.accountHint}>{t('accountBalanceHint')}</div>
+      ) : null}
       {pending ? (
         <div className={styles.accountHint}>{t('accountSignInHint')}</div>
       ) : null}
@@ -560,10 +585,24 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
   const replacingHistory = useChatStore((state) => state.importingHistory)
   const historyBusy = historyImport.busy || historyDelete.busy || replacingHistory
 
+  /**
+   * 右上角 ✕：也按层级逐级返回（编辑子页 → 模型页 → 设置主页 → 关闭设置），
+   * 只有退到设置主页时才真正关闭整个设置。与返回键/安卓返回键行为一致。
+   */
   const close = () => {
-    if (!historyBusy) {
-      closeSettings()
+    if (historyBusy) {
+      return
     }
+    const { editingProviderId, page } = useSettingsDialog.getState()
+    if (editingProviderId !== null && page !== null) {
+      closeProviderEditor()
+      return
+    }
+    if (page !== null) {
+      closeSettingsSection()
+      return
+    }
+    closeSettings()
   }
 
   // 瀛愰〉鏍囬锛氶椤靛叆鍙ｅ垪琛ㄥ彧鍚儴鍒嗗垎缁勶紝appearance 绛夊崟鐙ˉ鏍囬

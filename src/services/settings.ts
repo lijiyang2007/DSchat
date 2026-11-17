@@ -451,7 +451,7 @@ export const useSettings = create<Settings>(() => ({
   allowEditAssistant: readBool(KEYS.allowEditAssistant, true),
   savedMemoryEnabled: readBool(KEYS.savedMemoryEnabled, true),
   autoExtractMemory: readBool(KEYS.autoExtractMemory, true),
-  crossChatMemory: readBool(KEYS.crossChatMemory, true),
+  crossChatMemory: readBool(KEYS.crossChatMemory, false),
   crossChatMemoryLimit: Math.min(10, Math.max(1, readNumber(KEYS.crossChatMemoryLimit) ?? 4)),
   refusalEnabled: readBool(KEYS.refusalEnabled, false),
   refusalKeywords: read(KEYS.refusalKeywords) ?? '',
