@@ -14,6 +14,7 @@ const entries = {
   imageNormalize: 'src/services/imageNormalize.ts',
   welcome: 'src/services/chat/welcome.ts',
   sessionSort: 'src/components/sider/sessionSortState.ts',
+  versioning: 'src/services/versioning.ts',
 }
 
 const build = (name, entryFile) =>

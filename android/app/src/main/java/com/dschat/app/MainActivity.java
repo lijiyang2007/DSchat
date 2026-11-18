@@ -420,6 +420,66 @@ public class MainActivity extends BridgeActivity {
                 runOnUiThread(() -> triggerApkInstall(file));
             }
         }
+
+        /**
+         * 保存导出的会话 ZIP（v2.7.7）。
+         *
+         * WebView 里 <a download> + blob: URL 不生效——这是「导出按钮点了没反应」的根因，
+         * 所以必须由原生层落盘。base64 由前端传进来（ZIP 一般几百 KB ~ 几 MB，
+         * 走字符串桥接可以接受）。
+         *
+         * 优先写公共「下载」目录（Android 10+ 走 MediaStore，免权限）；
+         * 老系统退回应用私有外部目录。返回最终落盘路径，失败返回空串。
+         */
+        @JavascriptInterface
+        public String saveExportedFile(String fileName, String base64Data) {
+            try {
+                byte[] bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+                String safeName = fileName == null ? "dschat-export.zip" : fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+                if (safeName.isEmpty()) {
+                    safeName = "dschat-export.zip";
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.content.ContentValues values = new android.content.ContentValues();
+                    values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safeName);
+                    values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/zip");
+                    values.put(
+                        android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_DOWNLOADS
+                    );
+                    Uri target = getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        values
+                    );
+                    if (target == null) {
+                        return "";
+                    }
+                    try (OutputStream out = getContentResolver().openOutputStream(target)) {
+                        if (out == null) {
+                            return "";
+                        }
+                        out.write(bytes);
+                        out.flush();
+                    }
+                    return android.os.Environment.DIRECTORY_DOWNLOADS + "/" + safeName;
+                }
+                File dir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS);
+                if (dir == null) {
+                    dir = new File(getFilesDir(), "exports");
+                }
+                if (!dir.exists() && !dir.mkdirs()) {
+                    return "";
+                }
+                File outFile = new File(dir, safeName);
+                try (FileOutputStream out = new FileOutputStream(outFile)) {
+                    out.write(bytes);
+                    out.flush();
+                }
+                return outFile.getAbsolutePath();
+            } catch (Exception e) {
+                return "";
+            }
+        }
     }
 
     private void triggerApkInstall(File apkFile) {

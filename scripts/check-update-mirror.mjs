@@ -43,7 +43,7 @@ check('竞速只收合法结果', /fetchFastest<ReleaseInfo>/.test(updater))
 console.log('\n只推最新一版')
 check('存在 pickHighestRelease', updater.includes('pickHighestRelease'))
 check('跳过草稿与预发布', updater.includes('obj.draft === true') && updater.includes('obj.prerelease === true'))
-check('按版本号比较', /compareVersions\(parsed\.version, best\.version\) > 0/.test(updater))
+check('按版本号比较（pickNewestAbove，含降级过滤）', /pickNewestAbove/.test(updater))
 
 console.log('\n取消下载（不再卡死页面）')
 check('导出 cancelUpdateDownload', updater.includes('export const cancelUpdateDownload'))

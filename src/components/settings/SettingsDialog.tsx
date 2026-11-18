@@ -21,11 +21,13 @@ import {
   BackupError,
   clearHistory,
   exportHistory,
+  exportSession,
   importHistory,
 } from '../../services/chat/backup.js'
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
 import { formatBalance, refreshBalance, useBalance } from '../../services/balance.js'
 import { useChatStore } from '../../services/chat/store.js'
+import { saveBlob } from '../../services/saveFile.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
   FONT_SCALES,
@@ -51,6 +53,7 @@ import {
 } from '../../services/tokenUsage.js'
 import {
   checkForUpdates,
+  loadInstalledRelease,
   getCurrentAppVersion,
   openUpdateModal,
   useUpdater,
@@ -360,11 +363,12 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
           title={t('updateAnnouncementEntryLabel')}
           description={t('updateAnnouncementEntryDesc')}
           onClick={() => {
-            // 有缓存结果直接展示；否则先检查再由竞速回调打开弹窗
-            if (latest) {
+            // 有新版本：直接展示待更新公告；没有新版本：展示「本版更新内容」
+            // （2.7.7 前这里装完新版就打不开了，用户永远看不到这一版改了什么）
+            if (hasUpdate && latest) {
               openUpdateModal()
             } else {
-              void checkForUpdates({ manual: true })
+              void loadInstalledRelease()
             }
           }}
         />
@@ -697,6 +701,7 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
     return (
       <>
         <ImportHistory historyImport={historyImport} disabled={historyBusy} />
+        <ExportCurrentSession disabled={historyBusy} />
         <ExportHistory disabled={historyBusy} />
         <SettingCell
           label={t('deleteAllSessions')}
@@ -930,11 +935,21 @@ const UpdateSetting = () => {
         status={null}
         action={
           <div className={styles.fetchRow}>
-            {latest ? (
-              <Button variant="outlined" size="m" onClick={openUpdateModal}>
-                {t('updateViewAnnouncement')}
-              </Button>
-            ) : null}
+            <Button
+              variant="outlined"
+              size="m"
+              onClick={() => {
+                // 有缓存且有新版本 → 待更新公告；否则拉「本版更新内容」
+                // 2.7.7 前装完新版后 latest 为空，这个按钮直接消失，用户看不到公告
+                if (latest && useUpdater.getState().hasUpdate) {
+                  openUpdateModal()
+                } else {
+                  void loadInstalledRelease()
+                }
+              }}
+            >
+              {t('updateViewAnnouncement')}
+            </Button>
             <Button
               variant="outlined"
               size="m"
@@ -1345,12 +1360,13 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
     setStatus(null)
     try {
       const { name, blob } = await exportHistory()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = name
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      // Android WebView 里 <a download> 对 blob: URL 不生效，saveBlob 会改走原生桥接落盘
+      const saved = await saveBlob(name, blob)
+      if (!saved.ok) {
+        setStatus({ key: 'historyExportSaveFailed', error: true })
+        return
+      }
+      showToast({ key: 'historyExportSaved', params: { name: saved.location || name } })
     } catch (error) {
       setStatus(errorStatus('historyExportFailed', error))
     } finally {
@@ -1373,6 +1389,58 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
         >
           <IconDownloadOutline16 />
           {t('exportAllDownload')}
+        </Button>
+      }
+    />
+  )
+}
+
+/**
+ * 导出当前对话（v2.7.7）。
+ * 与「导出全部」同格式，只是只装一个会话，导入后照样能接着聊。
+ */
+const ExportCurrentSession = ({ disabled }: { disabled: boolean }) => {
+  const t = useTranslate()
+  const activeId = useChatStore((state) => state.activeId)
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<Status>(null)
+
+  const onExport = async () => {
+    if (!activeId) {
+      return
+    }
+    setBusy(true)
+    setStatus(null)
+    try {
+      const { name, blob } = await exportSession(activeId)
+      const saved = await saveBlob(name, blob)
+      if (!saved.ok) {
+        setStatus({ key: 'historyExportSaveFailed', error: true })
+        return
+      }
+      showToast({ key: 'historyExportSaved', params: { name: saved.location || name } })
+    } catch (error) {
+      setStatus(errorStatus('historyExportFailed', error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SettingCell
+      label={t('exportSessionLabel')}
+      description={activeId ? t('exportSessionDescription') : t('exportSessionEmpty')}
+      status={status}
+      action={
+        <Button
+          variant="outlined"
+          size="m"
+          className={styles.cellButton}
+          disabled={disabled || busy || !activeId}
+          onClick={() => void onExport()}
+        >
+          <IconDownloadOutline16 />
+          {t('exportSessionDownload')}
         </Button>
       }
     />

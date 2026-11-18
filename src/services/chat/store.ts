@@ -2,15 +2,12 @@ import { create } from 'zustand'
 import { translate } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { showToast } from '../../components/base/toastState.js'
-import { ApiError } from '../api/client.js'
-import {
-  fetchAnthropicMessage,
-  fetchOpenAIMessage,
-  fetchResponsesMessage,
-} from '../api/fetchOnce.js'
+import { ApiError, streamMessage } from '../api/client.js'
 import {
   blobToDataUrl,
   recognizeWithOpenAIVision,
+  streamOpenAIMessage,
+  streamResponsesMessage,
 } from '../api/openai.js'
 import { getApiOrigin } from '../api/origin.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
@@ -1328,10 +1325,10 @@ const summarizeRounds = async ({
     max_tokens: 1200,
   }
   const origin = settings.apiOrigin || getApiOrigin()
-  // 压缩摘要同样走非流式：简短输入输出，一次性拿结果更稳
+  // 压缩摘要与主链路统一走流式（同一套传输，避免两套路径各自踩坑）
   const events =
     settings.chatProtocol === 'responses'
-      ? fetchResponsesMessage(
+      ? streamResponsesMessage(
           origin,
           apiKey,
           body,
@@ -1341,7 +1338,7 @@ const summarizeRounds = async ({
           settings.customHeaders
         )
       : settings.chatProtocol === 'openai' || settings.chatProtocol === 'local'
-        ? fetchOpenAIMessage(
+        ? streamOpenAIMessage(
             origin,
             apiKey,
             body,
@@ -1350,7 +1347,7 @@ const summarizeRounds = async ({
             new Map(),
             settings.customHeaders
           )
-        : fetchAnthropicMessage(apiKey, body, signal)
+        : streamMessage(apiKey, body, signal)
 
   let output = ''
   for await (const event of events) {
@@ -1592,13 +1589,14 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             : {}),
         }
         /**
-         * v2.7.1 起整体取消流式输出：部分网关流式表现不稳定（增量丢失、蹦段、断流），
-         * 回归非流式一次性拿完整回答；事件仍按统一 MessageStreamEvent 合成，
-         * 渲染、用量统计、标题提取管线原样复用。
+         * v2.7.7 起恢复真流式（参考官方 chat-demo）：
+         * 2.7.1 曾因部分网关流式不稳改成非流式 + 打字机伪装，但那样「一下子蹦出来」
+         * 的观感反而更差，且白等完整生成。现在按官方做法：边收边渲染，
+         * 渲染节流交给 Markdown 层（useThrottleMarkdownRender），不再有打字机。
          */
         const events =
           settings.chatProtocol === 'responses'
-            ? fetchResponsesMessage(
+            ? streamResponsesMessage(
                 settings.apiOrigin || getApiOrigin(),
                 settings.apiKey ?? '',
                 requestBody,
@@ -1608,7 +1606,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                 settings.customHeaders
               )
             : settings.chatProtocol === 'openai' || settings.chatProtocol === 'local'
-              ? fetchOpenAIMessage(
+              ? streamOpenAIMessage(
                   settings.apiOrigin || getApiOrigin(),
                   settings.apiKey ?? '',
                   requestBody,
@@ -1617,16 +1615,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   inlinePrepared.inlineTexts,
                   settings.customHeaders
                 )
-              : fetchAnthropicMessage(
-                  settings.apiKey ?? '',
-                  requestBody,
-                  controller.signal,
-                  messages.some(
-                    (message) =>
-                      typeof message.content !== 'string' &&
-                      message.content.some((block) => block.type === 'image' || block.type === 'document')
-                  )
-                )
+              : streamMessage(settings.apiKey ?? '', requestBody, controller.signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'

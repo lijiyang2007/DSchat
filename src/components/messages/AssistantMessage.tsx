@@ -19,7 +19,6 @@ import { ReadAloudButton } from './ReadAloudButton.js'
 import { CopyButton } from './CopyButton.js'
 import { ReplyArea } from './ReplyArea.js'
 import { useReplyView } from './useReplyView.js'
-import { useTypewriter } from '../markdown/useTypewriter.js'
 import {
   BranchSwitcher,
   type MessageVersions,
@@ -76,12 +75,9 @@ export const AssistantMessage = memo(function AssistantMessage({
     streaming && view.steps.length === 0 && !view.answer && !message.thinking
   // 发送前正在压缩长历史（导入的长对话首次发送时）：等待点旁边给出明确提示，避免像卡死
   const compacting = useChatStore((state) => Boolean(state.compacting[sessionId]))
-  // 非流式回答按固定字速逐字揭示（参考官方 chat-demo 流式观感），尾部带闪烁光标
-  const revealed = useTypewriter(
-    answer?.markdown ?? '',
-    streaming && Boolean(answer),
-    message.id
-  )
+  // v2.7.7 起恢复真流式：正文随 SSE 增量直接上屏，不再走打字机伪装。
+  // 渲染节流由 Markdown 层的 useThrottleMarkdownRender 按渲染耗时代理（官方 chat-demo 同款）。
+  const revealed = answer?.markdown ?? ''
   const summaryEntry = `${message.id}-summary`
 
   const [editing, setEditing] = useState(false)

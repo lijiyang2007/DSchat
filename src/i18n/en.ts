@@ -219,10 +219,17 @@ export const en = {
   historyImportFailed:
     'File import failed. The file format may be invalid, or the ZIP file may use an older chat export format. Please export your chat history from DeepSeek again and retry the import.',
   historyExportFailed: 'Export failed: {message}',
+  historyExportSaveFailed: 'Save failed: storage permission denied or not enough space',
+  historyExportSaved: 'Saved to "{name}"',
   exportAllLabel: 'Export all chats',
   historyExportDescription:
-    'Includes all chat history and locally stored images. Other attachments retain file details only. Your API Key is not included.',
-  exportAllDownload: 'Download',
+    'Includes all chat history and locally stored images. Other attachments retain file details only. Your API Key is not included. The archive can be imported again and conversations continue.',
+  exportAllDownload: 'Export all',
+  exportSessionLabel: 'Export current chat',
+  exportSessionDescription:
+    'Exports only the currently open chat, in the same format as "Export all", and can be imported on its own.',
+  exportSessionDownload: 'Export',
+  exportSessionEmpty: 'Open a chat first to export it',
   deleteAllSessions: 'Delete all chats',
   deleteAllSessionsModalTitle: 'Once deleted, all chats will be cleared and cannot be recovered.',
   deleteAllSessionsModalDescription:
@@ -543,6 +550,15 @@ export const en = {
   sponsorPageIntro: 'These friends sponsored the development of DSchat (in order of sponsorship):',
   sponsorEmpty: 'List coming soon',
   updateUpToDateToast: 'You are on the latest version v{version}',
+  updateBlockedDowngrade:
+    'Cannot install an older version: current v{current}, target v{target}. Only newer versions can be installed',
+  updateBlockedSame: 'You are already on v{version}, no need to reinstall',
+  updateBlockedInvalid: 'v{version} is not a valid version number, install blocked',
+  updateChannelRelease: 'Release',
+  updateChannelTest: 'Beta',
+  updateNotesUnavailable:
+    'Release notes are unavailable right now (network or GitHub mirror issue). Try again later',
+  updateInstalledNotesTitle: "What's new in v{version}",
   updateNoReleasesToast: 'No published releases found on GitHub yet',
   updateCheckFailedToast: 'Update check failed: {message}',
   updateSkippedToast: 'Skipped reminders for v{version}',

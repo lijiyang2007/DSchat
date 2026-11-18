@@ -99,8 +99,12 @@ check(
   /'x-dsh-auth-token': token/.test(client) && /'x-api-key': apiKey/.test(client)
 )
 
-// 主链路走 fetchAnthropicMessage
-check('对话主链路用 fetchAnthropicMessage', /fetchAnthropicMessage\(/.test(store))
+// 2.7.7 起主链路走真流式 streamMessage；它同样用 anthropicUrl()（Messages 全路径）
+check(
+  '对话主链路用 streamMessage（官方协议全路径）',
+  /streamMessage\(settings\.apiKey/.test(store) &&
+    /\$\{anthropicBaseUrl\(\)\}\/messages/.test(client)
+)
 
 console.log(failed === 0 ? '\n全部通过\n' : `\n${failed} 项失败\n`)
 process.exit(failed === 0 ? 0 : 1)

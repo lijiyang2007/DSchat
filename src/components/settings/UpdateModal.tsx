@@ -12,6 +12,7 @@ import {
   useUpdater,
 } from '../../services/updater.js'
 import { useSettings } from '../../services/settings.js'
+import { parseVersion } from '../../services/versioning.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { Markdown } from '../markdown/Markdown.js'
@@ -25,6 +26,7 @@ export const UpdateModal = () => {
   const locale = useSettings((state) => state.locale)
   const open = useUpdater((state) => state.modalOpen)
   const latest = useUpdater((state) => state.latest)
+  const installedRelease = useUpdater((state) => state.installedRelease)
   const hasUpdate = useUpdater((state) => state.hasUpdate)
   const download = useUpdater((state) => state.download)
 
@@ -33,8 +35,14 @@ export const UpdateModal = () => {
   }
 
   const current = getCurrentAppVersion()
-  const publishedText = latest.publishedAt
-    ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(latest.publishedAt))
+  // 没有新版本时展示的是「本版更新内容」：正文取 installedRelease，避免把
+  // 更高版本的公告错当成当前版本的内容
+  const showingInstalled = !hasUpdate && Boolean(installedRelease)
+  const shown = showingInstalled ? installedRelease ?? latest : latest
+  // 版本通道：两段=正式版，三段=测试版（规则见 services/versioning.ts）
+  const latestChannel = parseVersion(shown.version)?.channel ?? null
+  const publishedText = shown.publishedAt
+    ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(shown.publishedAt))
     : ''
   const downloading = download.status === 'downloading'
   // 缓存里已经有下好的包：直接装，不再重下
@@ -43,7 +51,11 @@ export const UpdateModal = () => {
 
   return (
     <Modal
-      title={t('updateModalTitle', { version: latest.version })}
+      title={
+        showingInstalled
+          ? t('updateInstalledNotesTitle', { version: shown.version })
+          : t('updateModalTitle', { version: latest.version })
+      }
       // 始终可关闭：下载卡住时不能把用户锁死在弹窗里
       closable
       className={styles.modal}
@@ -95,25 +107,34 @@ export const UpdateModal = () => {
     >
       <div className={styles.metaRow}>
         <span className={styles.versionBadge}>
-          v{current.versionName} → v{latest.version}
+          {showingInstalled
+            ? `v${shown.version}`
+            : `v${current.versionName} → v${latest.version}`}
         </span>
+        {latestChannel ? (
+          <span className={styles.metaText}>
+            {latestChannel === 'release'
+              ? t('updateChannelRelease')
+              : t('updateChannelTest')}
+          </span>
+        ) : null}
         {publishedText ? (
           <span className={styles.metaText}>{t('updatePublishedAt', { date: publishedText })}</span>
         ) : null}
-        {latest.apkSize ? (
+        {shown.apkSize && !showingInstalled ? (
           <span className={styles.metaText}>
-            {t('updatePackageSize', { size: formatMb(latest.apkSize) })}
+            {t('updatePackageSize', { size: formatMb(shown.apkSize) })}
           </span>
         ) : null}
       </div>
 
       <div className={styles.notesTitle}>{t('updateAnnouncementTitle')}</div>
       <div className={styles.notesBox}>
-        {latest.body ? (
+        {shown.body ? (
           <Markdown
-            content={latest.body}
+            content={shown.body}
             loading={false}
-            cacheKey={`release-${latest.tagName}`}
+            cacheKey={`release-${shown.tagName}`}
             disableLink={false}
           />
         ) : (

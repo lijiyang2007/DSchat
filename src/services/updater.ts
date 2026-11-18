@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { showToast } from '../components/base/toastState.js'
+import { translate } from '../i18n/index.js'
 import { fetchWithDevProxy } from './api/origin.js'
+import {
+  compareVersionNumbers,
+  evaluateInstall,
+  normalizeVersion,
+  pickNewestAbove,
+} from './versioning.js'
 
 export const GITHUB_REPO = 'lijiyang2007/DSchat'
 export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`
@@ -168,44 +175,13 @@ export const getCurrentAppVersion = (): AppVersionInfo => {
   }
 }
 
-export const normalizeVersion = (raw: string): string => raw.trim().replace(/^v/i, '')
+export { normalizeVersion }
 
-const parseVersionTuple = (raw: string): [number[], string] => {
-  const clean = normalizeVersion(raw)
-  const [core, pre = ''] = clean.split('-', 2)
-  const nums = core.split('.').map((part) => {
-    const n = Number.parseInt(part, 10)
-    return Number.isFinite(n) && n >= 0 ? n : 0
-  })
-  while (nums.length < 3) {
-    nums.push(0)
-  }
-  return [nums, pre]
-}
-
-/** 比较版本号：a > b 返回 1，a < b 返回 -1，相等返回 0 */
-export const compareVersions = (a: string, b: string): number => {
-  const [na, pa] = parseVersionTuple(a)
-  const [nb, pb] = parseVersionTuple(b)
-  const len = Math.max(na.length, nb.length)
-  for (let i = 0; i < len; i++) {
-    const va = na[i] ?? 0
-    const vb = nb[i] ?? 0
-    if (va > vb) {
-      return 1
-    }
-    if (va < vb) {
-      return -1
-    }
-  }
-  if (!pa && pb) {
-    return 1
-  }
-  if (pa && !pb) {
-    return -1
-  }
-  return pa.localeCompare(pb)
-}
+/**
+ * 版本比较统一走 versioning.ts：两段=正式版、三段=测试版，
+ * 缺段补 0，任何降级都不允许。
+ */
+export const compareVersions = (a: string, b: string): number => compareVersionNumbers(a, b)
 
 const readSkippedVersion = (): string => {
   try {
@@ -231,6 +207,8 @@ type UpdaterStore = {
   checking: boolean
   modalOpen: boolean
   latest: ReleaseInfo | null
+  /** 当前已安装版本的公告（v2.7.7）：装完新版后用户仍要能查「这版更新了什么」 */
+  installedRelease: ReleaseInfo | null
   hasUpdate: boolean
   lastCheckedAt: number | null
   error: string | null
@@ -250,6 +228,7 @@ export const useUpdater = create<UpdaterStore>(() => ({
   checking: false,
   modalOpen: false,
   latest: null,
+  installedRelease: null,
   hasUpdate: false,
   lastCheckedAt: null,
   error: null,
@@ -387,13 +366,13 @@ const minimalReleaseInfo = (version: string): ReleaseInfo => {
 
 /**
  * 从 release 列表里挑版本号最大的那条。
- * 跳过草稿和预发布；版本号比较用 compareVersions，不看发布时间。
+ * 跳过草稿和预发布；版本号比较走 versioning（两段=正式版、三段=测试版）。
  */
 const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
   if (!Array.isArray(raw)) {
     return null
   }
-  let best: ReleaseInfo | null = null
+  const candidates: ReleaseInfo[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       continue
@@ -403,14 +382,12 @@ const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
       continue
     }
     const parsed = parseGitHubRelease(obj)
-    if (!parsed) {
-      continue
-    }
-    if (!best || compareVersions(parsed.version, best.version) > 0) {
-      best = parsed
+    if (parsed) {
+      candidates.push(parsed)
     }
   }
-  return best
+  // 只留「比当前高」的候选：旧版本绝不能当成更新推给用户
+  return pickNewestAbove(getCurrentAppVersion().versionName, candidates)
 }
 
 /**
@@ -419,7 +396,9 @@ const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
  */
 const applyReleaseResult = (release: ReleaseInfo, manual: boolean): boolean => {
   const current = getCurrentAppVersion()
-  const hasUpdate = compareVersions(release.version, current.versionName) > 0
+  // 只有严格更高才算更新：同版本或降级一律不提示（版本规则见 versioning.ts）
+  const verdict = evaluateInstall(current.versionName, release.version)
+  const hasUpdate = verdict.kind === 'upgrade'
   const skipped = readSkippedVersion()
   useUpdater.setState({
     checking: false,
@@ -433,6 +412,80 @@ const applyReleaseResult = (release: ReleaseInfo, manual: boolean): boolean => {
     showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
   }
   return true
+}
+
+/**
+ * 找出「当前已安装版本」自己的 Release（v2.7.7）。
+ *
+ * 为什么需要：更新公告以前只在「有新版本」时能看，用户装完新版就再也查不到
+ * 「这一版到底改了什么」——这正是「每次更新的简介没有落实」的根因。
+ * 这里单独拿一次 release 列表，按版本号精确匹配当前安装的版本。
+ */
+const fetchInstalledRelease = async (): Promise<ReleaseInfo | null> => {
+  const current = getCurrentAppVersion()
+  const target = normalizeVersion(current.versionName)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetchWithDevProxy(RELEASES_LIST_API, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      return null
+    }
+    const payload: unknown = await response.json()
+    if (!Array.isArray(payload)) {
+      return null
+    }
+    for (const item of payload) {
+      if (typeof item !== 'object' || item === null) {
+        continue
+      }
+      const obj = item as Record<string, unknown>
+      if (obj.draft === true) {
+        continue
+      }
+      const parsed = parseGitHubRelease(obj)
+      if (parsed && compareVersionNumbers(parsed.version, target) === 0) {
+        return parsed
+      }
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+/**
+ * 打开「本版更新公告」：拿当前安装版本自己的 Release 正文。
+ * 与检查更新解耦——没有新版本时也能看这一版改了什么。
+ */
+export const loadInstalledRelease = async (): Promise<void> => {
+  if (useUpdater.getState().installedRelease) {
+    useUpdater.setState({ modalOpen: true })
+    return
+  }
+  useUpdater.setState({ checking: true, error: null })
+  const release = await fetchInstalledRelease()
+  if (release) {
+    useUpdater.setState({
+      checking: false,
+      installedRelease: release,
+      // 没有新版本时，把「本版公告」当作 latest 展示（Modal 读 latest）
+      latest: useUpdater.getState().latest ?? release,
+      modalOpen: true,
+      error: null,
+    })
+    return
+  }
+  useUpdater.setState({
+    checking: false,
+    error: '无法获取当前版本的更新公告',
+  })
+  showToast({ key: 'updateNotesUnavailable' })
 }
 
 /** 从 GitHub Releases 检查最新版本并获取更新公告 */
@@ -546,6 +599,21 @@ export const startUpdateInstall = () => {
     return
   }
   const current = getCurrentAppVersion()
+  // 安装前的最后一道闸：任何降级 / 同版本都拦下，不给下载也不给装
+  const verdict = evaluateInstall(current.versionName, latest.version)
+  if (verdict.kind !== 'upgrade') {
+    const reason =
+      verdict.kind === 'downgrade'
+        ? translate('updateBlockedDowngrade', {
+            current: verdict.from.raw,
+            target: verdict.to.raw,
+          })
+        : verdict.kind === 'same'
+          ? translate('updateBlockedSame', { version: latest.version })
+          : translate('updateBlockedInvalid', { version: latest.version })
+    showToast(reason)
+    return
+  }
   const bridge = getAndroidBridge()
   if (current.isAndroid && latest.apkUrl && bridge?.downloadAndInstallApk) {
     writeSkippedVersion('')

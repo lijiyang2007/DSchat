@@ -16,7 +16,16 @@ const enqueueBackup = <T>(run: () => Promise<T>): Promise<T> => {
 
 const backupFileName = (date: Date) => `deepseek_data-${formatDate(date)}.zip`
 
-/** 导出为历史会话导出格式的 ZIP，可再次导入。 */
+/** 单个会话导出时的文件名：带上会话标题，便于在文件管理器里认出来 */
+const sessionFileName = (date: Date, title: string) => {
+  const clean = title
+    .trim()
+    .replace(/[\\/:*?"<>|\r\n]+/g, '_')
+    .slice(0, 40)
+  return `deepseek_session-${formatDate(date)}${clean ? `-${clean}` : ''}.zip`
+}
+
+/** 导出全部会话为历史会话导出格式的 ZIP，可再次导入。 */
 export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
   enqueueBackup(async () => {
     // 列表和已加载内容保留导出开始时的快照；未打开的会话逐条读取，不填满详情缓存。
@@ -37,6 +46,29 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
     const now = new Date()
     const blob = await exportArchive(readSessions())
     return { name: backupFileName(now), blob }
+  })
+
+/**
+ * 只导出单个会话（v2.7.7）。
+ *
+ * 产物与「导出全部」同格式（manifest + sessions/<id>.json + index.json + files/），
+ * 所以导入时照样能延续会话内容，不需要单独的导入分支。
+ */
+export const exportSession = (sessionId: string): Promise<{ name: string; blob: Blob }> =>
+  enqueueBackup(async () => {
+    const { sessions, sessionCache } = useChatStore.getState()
+    const summary = sessions.find((item) => item.id === sessionId)
+    const session = Object.hasOwn(sessionCache, sessionId)
+      ? sessionCache[sessionId]
+      : await db.loadSession(sessionId)
+    if (!session) {
+      throw new Error(`History session disappeared during export: ${sessionId}`)
+    }
+    const merged = summary ? { ...session, ...summary } : session
+    const { exportArchive } = await import('./history/exportArchive.js')
+    const now = new Date()
+    const blob = await exportArchive([merged])
+    return { name: sessionFileName(now, merged.title ?? ''), blob }
   })
 
 /**
