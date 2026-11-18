@@ -33,8 +33,13 @@ check(
   /const forceScrollToBottom = useCallback/.test(ml)
 )
 check(
-  'forceScrollToBottom 直接 scrollTo(scrollHeight)，忽略 sticky',
-  /forceScrollToBottom[\s\S]{0,300}el\.scrollTo\(\{ top: el\.scrollHeight/.test(ml)
+  'forceScrollToBottom 绕过 sticky 落到底部',
+  // v2.8.6 起交给窗口化钩子（内部绕过 sticky 并持续贴底到高度稳定）；
+  // 窗口化关闭时它仍走 el.scrollTo({ top: el.scrollHeight })
+  /forceScrollToBottom[\s\S]{0,400}scrollWindowToBottom\(\{ smooth: !reduceMotion \}\)/.test(ml) &&
+    /scrollToBottom[\s\S]{0,600}scroll\.scrollTop = scroll\.scrollHeight/.test(
+      read('src/components/messages/useMessageWindowing.ts')
+    )
 )
 check(
   '尊重 prefers-reduced-motion',

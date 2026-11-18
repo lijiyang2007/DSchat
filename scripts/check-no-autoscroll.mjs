@@ -49,8 +49,15 @@ check(
 console.log('\n四、切换会话仍滚到底（体验保留）')
 check('有 lastSessionIdRef', /lastSessionIdRef/.test(ml))
 check(
-  '切换会话时直接滚到底（绕过 stickyRef）',
-  /lastSessionIdRef\.current !== session\.id[\s\S]{0,300}scrollTop = el\.scrollHeight/.test(ml)
+  '切换会话时落底（绕过 stickyRef）',
+  // v2.8.6 起落底交给窗口化的 scrollWindowToBottom（它内部绕过 stickyRef 并持续贴底到高度稳定）；
+  // 旧实现是这里直接 el.scrollTop = el.scrollHeight
+  /lastSessionIdRef\.current !== session\.id[\s\S]{0,400}(scrollWindowToBottom\(\)|scrollTop = el\.scrollHeight)/
+    .test(ml)
+)
+check(
+  '首次挂载也落底（ref 初值不是当前会话 id）',
+  /lastSessionIdRef = useRef<string \| null>\(null\)/.test(ml)
 )
 
 console.log(failed === 0 ? '\n全部通过\n' : `\n${failed} 项失败\n`)

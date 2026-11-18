@@ -72,10 +72,13 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 长会话虚拟化：视口外消息跳过渲染，估算高度稳定滚动条 */
-.virtualItem {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 160px;
+/* 长会话窗口化：只挂载视口附近的消息，视口外用等高占位块撑住滚动条 */
+.item {
+  display: flow-root;
+}
+
+.pad {
+  flex-shrink: 0;
 }
 
 /* 回到最新：绕过「生成时不自动滚动」的 sticky 守卫，点一下回到底部 */

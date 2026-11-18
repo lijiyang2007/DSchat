@@ -6,8 +6,8 @@ declare const styles: {
   readonly "contextBanner": string;
   readonly "contextBannerText": string;
   readonly "contextBannerHint": string;
-  readonly "virtualItem": string;
+  readonly "item": string;
+  readonly "pad": string;
   readonly "backToBottom": string;
 };
 export = styles;
-

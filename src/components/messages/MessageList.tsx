@@ -13,6 +13,7 @@ import { closeSearchPanel } from '../search/searchPanelState.js'
 import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { UserMessage } from './UserMessage.js'
+import { estimateMessageHeight, useMessageWindowing } from './useMessageWindowing.js'
 import type { Message } from '../../services/chat/types.js'
 
 /**
@@ -32,10 +33,11 @@ const getUploadRetryId = (messages: Message[], streaming: boolean) => {
 import styles from './MessageList.module.css'
 
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
-/** 消息数超过这个值时启用视口外跳过渲染，避免长会话卡顿 */
-const VIRTUALIZE_THRESHOLD = 30
+/** 消息数超过这个值时启用窗口化渲染，避免长会话把全部消息都挂进 DOM */
+const WINDOWING_THRESHOLD = 30
 /** 距底部超过该值时显示「回到最新」按钮 */
 const SHOW_BACK_TO_BOTTOM_THRESHOLD = 200
+const EMPTY_ESTIMATES: number[] = []
 
 export const MessageList = ({
   session,
@@ -51,6 +53,7 @@ export const MessageList = ({
   const [summaryOpen, setSummaryOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const bannerRef = useRef<HTMLButtonElement>(null)
   // 不自动跟随底部：AI 流式输出时用户视角停在哪就留在哪，新文字在下方累积。
   // 恒为 false → scrollToBottom() 的守卫始终拦截自动滚动（见下方 scrollToBottom）。
   const stickyRef = useRef(false)
@@ -77,17 +80,33 @@ export const MessageList = ({
     }
   }, [])
 
+  // 长会话窗口化：只挂载视口附近的消息，其余用等高占位块撑住滚动条。
+  // 消息少（或正在流式输出末尾）时整列照常渲染，行为与以前完全一致。
+  const windowed = messages.length > WINDOWING_THRESHOLD && !streaming
+  const ids = useMemo(() => messages.map((message) => message.id), [messages])
+  const estimates = useMemo(
+    () => (windowed ? messages.map(estimateMessageHeight) : EMPTY_ESTIMATES),
+    [messages, windowed]
+  )
+  const { start, end, padTop, padBottom, scrollToBottom: scrollWindowToBottom } =
+    useMessageWindowing({
+      scrollRef,
+      columnRef: contentRef,
+      leadRef: bannerRef,
+      ids,
+      estimates,
+      enabled: windowed,
+      layoutKey: `${session.id}:${isMobile}`,
+    })
+
   // 按钮专用：绕过 stickyRef 守卫（恒 false，供「生成时不自动滚动」使用），
   // 直接把滚动容器拉到最新。尊重系统「减少动画」偏好。
+  // 窗口化时由 scrollWindowToBottom 接管：它会持续贴底到高度测量稳定，
+  // 否则平滑动画会停在旧的目标高度（实测点完仍差十几万像素）。
   const forceScrollToBottom = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) {
-      return
-    }
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' })
-    scrollTopRef.current = el.scrollHeight
-  }, [])
+    scrollWindowToBottom({ smooth: !reduceMotion })
+  }, [scrollWindowToBottom])
 
   // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
   useLayoutEffect(() => {
@@ -121,18 +140,17 @@ export const MessageList = ({
 
   // 切换会话时一次性滚到底部（绕过 stickyRef），让用户直接看到最新消息；
   // 这与「流式生成不跟随」不冲突：只认 session.id，不认 lastMessageId。
-  const lastSessionIdRef = useRef(session.id)
+  // 首次挂载同样要落底：从欢迎页进入会话时组件是新建的，ref 初值就是当前 id，
+  // 只比较 id 会漏掉这一次（v2.8.6 修：开长会话停在顶部、要手动往下翻）。
+  const lastSessionIdRef = useRef<string | null>(null)
   useLayoutEffect(() => {
     if (lastSessionIdRef.current !== session.id) {
       lastSessionIdRef.current = session.id
       setShowBackToBottom(false)
-      const el = scrollRef.current
-      if (el) {
-        el.scrollTop = el.scrollHeight
-        scrollTopRef.current = el.scrollTop
-      }
+      // 窗口化时先让占位块按真实高度落位，再贴底（scrollWindowToBottom 会持续贴到稳定）
+      scrollWindowToBottom()
     }
-  }, [session.id])
+  }, [session.id, scrollWindowToBottom])
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
 
@@ -174,11 +192,6 @@ export const MessageList = ({
 
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
-  // 关闭虚拟化的场景：正在流式输出（末尾消息需实时刷新）或消息太少
-  const virtualize = messages.length > VIRTUALIZE_THRESHOLD && !streaming
-  // 每条消息外层：视口外时用 content-visibility 跳过渲染，
-  // contain-intrinsic-size 给出估算高度让滚动条保持稳定。
-  const itemClass = virtualize ? styles.virtualItem : undefined
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
       <div className={styles.wrapper}>
@@ -187,6 +200,7 @@ export const MessageList = ({
             <div ref={contentRef} className={styles.column}>
               {session.compaction?.summary ? (
                 <button
+                  ref={bannerRef}
                   type="button"
                   className={styles.contextBanner}
                   onClick={() => setSummaryOpen((open) => !open)}
@@ -204,9 +218,13 @@ export const MessageList = ({
                   </span>
                 </button>
               ) : null}
-              {messages.map((message, index) =>
-                message.role === 'user' ? (
-                  <div key={message.id} className={itemClass}>
+              {padTop > 0 ? (
+                <div className={styles.pad} style={{ height: padTop }} aria-hidden />
+              ) : null}
+              {messages.slice(start, end).map((message, offset) => {
+                const index = start + offset
+                return message.role === 'user' ? (
+                  <div key={message.id} className={styles.item} data-message-id={message.id}>
                     <UserMessage
                       key={message.id}
                       sessionId={session.id}
@@ -220,7 +238,7 @@ export const MessageList = ({
                     />
                   </div>
                 ) : (
-                  <div key={message.id} className={itemClass}>
+                  <div key={message.id} className={styles.item} data-message-id={message.id}>
                     <AssistantMessage
                       key={message.id}
                       sessionId={session.id}
@@ -233,7 +251,10 @@ export const MessageList = ({
                     />
                   </div>
                 )
-              )}
+              })}
+              {padBottom > 0 ? (
+                <div className={styles.pad} style={{ height: padBottom }} aria-hidden />
+              ) : null}
             </div>
           </div>
           {footer}
