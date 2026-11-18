@@ -12,8 +12,16 @@
 
 /** 归一化后的单图总像素预算；与官方桌面端 normalizedImageMaxPixels 一致 */
 const MAX_PIXELS = 2048 * 2048
-/** 长边上限：按 8192 档（15 张图以内）；缩放比例与总像素预算叠加生效 */
-const MAX_DIMENSION = 8192
+/**
+ * 长边上限。官方限制是「单边最长 8192px，**单个请求含 15 张及以上图片时降为 4096px**」。
+ * 历史长会话动辄几十张图（本机实测 45 张），按 8192 归一化出来的超长截图
+ * （如 708×8934 → 577×7275）仍会超 4096，服务端直接 400
+ * `messages.N.content.0: You have uploaded an unsupported image`。
+ * 这里统一按 4096 归一化，两种场景都安全。
+ */
+const MAX_DIMENSION = 4096
+/** 首次归一化失败（移动端内存紧张时解码可能失败）后重试的保守长边 */
+const RETRY_MAX_DIMENSION = 2048
 /** 归一化产物编码字节目标，超过时降低质量重编码 */
 const TARGET_BYTES = 4 * 1024 * 1024
 const WEBP_QUALITY_STEPS = [0.85, 0.75, 0.6]
@@ -137,7 +145,7 @@ export const readImageDimensions = (
   return null
 }
 
-/** 官方接口收不了或超预算：格式冷门、总像素超 2048² 或长边超 8192 */
+/** 官方接口收不了或超预算：格式冷门、总像素超 2048² 或长边超 MAX_DIMENSION */
 export const imageNeedsNormalize = (bytes: Uint8Array, size: number): boolean => {
   const mime = sniffImageMime(bytes)
   if (!NATIVE_MIME.has(mime)) {
@@ -174,7 +182,10 @@ const encode = async (canvas: HTMLCanvasElement, quality: number): Promise<Blob>
  * 解码失败或画布不可用时返回 null，调用方退回原件直传（保持旧行为）。
  * 动图会退化为首帧静态图：官方模型侧本就不消费动图动画。
  */
-export const normalizeImage = async (blob: Blob): Promise<NormalizedImage | null> => {
+export const normalizeImage = async (
+  blob: Blob,
+  maxDimension = MAX_DIMENSION
+): Promise<NormalizedImage | null> => {
   const bitmap = await decode(blob)
   if (!bitmap) {
     return null
@@ -183,7 +194,7 @@ export const normalizeImage = async (blob: Blob): Promise<NormalizedImage | null
     const scale = Math.min(
       1,
       Math.sqrt(MAX_PIXELS / (bitmap.width * bitmap.height)),
-      MAX_DIMENSION / Math.max(bitmap.width, bitmap.height)
+      maxDimension / Math.max(bitmap.width, bitmap.height)
     )
     const width = Math.max(1, Math.round(bitmap.width * scale))
     const height = Math.max(1, Math.round(bitmap.height * scale))
@@ -267,14 +278,20 @@ export const normalizeImageIfNeeded = async (
       return result
     }
   }
-  const normalized = (await normalizeImage(blob)) ?? { blob, mimeType, changed: false }
-  if (normalized.changed) {
+  // 按 4096 长边归一化；失败（移动端内存紧张时解码可能失败）再按更保守的 2048 重试一次，
+  // 仍失败才退回原件——原图直接上传会被服务端 400 拒掉，所以重试这一步值得。
+  let normalized = await normalizeImage(blob, MAX_DIMENSION)
+  if (!normalized) {
+    normalized = await normalizeImage(blob, RETRY_MAX_DIMENSION)
+  }
+  const result = normalized ?? { blob, mimeType, changed: false }
+  if (result.changed) {
     if (cacheKey) {
-      cacheNormalized(cacheKey, normalized)
+      cacheNormalized(cacheKey, result)
     }
     rejectedIds.delete(cacheKey ?? '')
   }
-  return normalized
+  return result
 }
 
 /** 测试钩子：清空归一化缓存与拒图标记 */

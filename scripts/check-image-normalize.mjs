@@ -94,6 +94,30 @@ check(
   imageNeedsNormalize(jpegHeader(3999, 3999), 5000) === true
 )
 
+console.log('\n三之二、超长截图必须归一化（v2.8.5 回归）')
+// 官方限制：单边 8192，但「单个请求含 15 张及以上图片时降为 4096」。
+// 历史长会话动辄几十张图，按 8192 归一化出的超长截图仍会 400 unsupported image。
+check(
+  'WebP 708×8934 超长截图触发归一化',
+  imageNeedsNormalize(webpVp8xHeader(708, 8934), 471706) === true
+)
+check(
+  'PNG 500×5000 超 4096 长边触发归一化',
+  imageNeedsNormalize(pngHeader(500, 5000), 5000) === true
+)
+check(
+  'PNG 1000×4096 恰好等于上限不触发',
+  imageNeedsNormalize(pngHeader(1000, 4096), 5000) === false
+)
+check(
+  '归一化长边上限为 4096（不再用 8192）',
+  /const MAX_DIMENSION = 4096/.test(readFileSync(path.join(root, 'src/services/imageNormalize.ts'), 'utf8'))
+)
+check(
+  '归一化失败有 2048 保守重试',
+  /RETRY_MAX_DIMENSION = 2048/.test(readFileSync(path.join(root, 'src/services/imageNormalize.ts'), 'utf8'))
+)
+
 console.log('\n四、发送路径接入')
 check('上传路径先归一化', /normalizeImageIfNeeded\(blob, blob\.type, id\)/.test(attachments))
 check('内联路径先归一化', /normalizeImageIfNeeded\(blob, file\.mimeType, file\.id\)/.test(store))
