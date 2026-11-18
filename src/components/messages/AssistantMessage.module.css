@@ -18,6 +18,14 @@
   height: 34px;
 }
 
+/* 压缩长历史时的提示文字：跟在等待点后面 */
+.compactingHint {
+  margin-left: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .waitingDot {
   width: 6px;
   height: 6px;

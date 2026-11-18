@@ -339,6 +339,7 @@ export const en = {
   contextUsageAuto: 'earlier turns are compacted automatically at 80%',
   contextUsageManual: 'auto compaction is off; nearing the limit may cause errors',
   contextCompactedToast: 'Context compacted: earlier turns were summarized',
+  contextCompactingHint: 'Compacting a long imported history before sending, please wait…',
   contextCompactedBanner: 'Earlier turns were compacted into a summary; local history is intact',
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: 'Show summary',

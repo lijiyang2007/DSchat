@@ -99,6 +99,8 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
+  /** 正在压缩上下文的会话：发送前把长历史总结成摘要，等待时间可能明显长于普通请求 */
+  compacting: Record<string, boolean>
 }
 
 export const useChatStore = create<ChatState>(() => ({
@@ -111,6 +113,7 @@ export const useChatStore = create<ChatState>(() => ({
   sessionSaveErrors: {},
   activeId: null,
   streaming: {},
+  compacting: {},
 }))
 
 const { getState: get, setState: set } = useChatStore
@@ -1392,6 +1395,7 @@ const maybeCompactContext = async (
   }
   const settings = useSettings.getState()
   const task = (async () => {
+    set((state) => ({ compacting: { ...state.compacting, [sessionId]: true } }))
     try {
       // 单轮压缩可能不够（保留的最近几轮本身就很长），最多再补压 2 次。
       for (let pass = 0; pass < 3; pass += 1) {
@@ -1432,6 +1436,11 @@ const maybeCompactContext = async (
       // 压缩失败不打断对话：继续用原文请求
     } finally {
       compactLocks.delete(sessionId)
+      set((state) => ({
+        compacting: Object.fromEntries(
+          Object.entries(state.compacting).filter(([id]) => id !== sessionId)
+        ),
+      }))
     }
   })()
   compactLocks.set(sessionId, task)

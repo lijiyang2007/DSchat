@@ -325,6 +325,7 @@ export const zh = {
   contextUsageAuto: '到 80% 会自动压缩较早内容',
   contextUsageManual: '未开启自动压缩，接近上限可能报错',
   contextCompactedToast: '上下文已自动压缩，较早内容已总结为摘要',
+  contextCompactingHint: '正在压缩较长的历史对话（导入的长对话首次发送时会自动总结），请稍候…',
   contextCompactedBanner: '较早的对话已压缩为摘要，本地记录仍然完整',
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: '展开摘要',

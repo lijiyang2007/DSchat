@@ -1,5 +1,6 @@
 import { ApiError, request } from './client.js'
 import { getApiOrigin, isDeepSeekOrigin, joinApiPath, normalizeOrigin } from './origin.js'
+import { accountToken } from '../account.js'
 
 /**
  * 语音接口：
@@ -9,6 +10,28 @@ import { getApiOrigin, isDeepSeekOrigin, joinApiPath, normalizeOrigin } from './
  * 注意：主服务地址可能是第三方中转（此时聊天可用，但中转没有 tools 接口），
  * 所以自定义渠道里单独填 https://api.deepseek.com + 官方 Key 是推荐做法。
  */
+/**
+ * 第三方接口的鉴权：只认 Bearer Key；没有 Key 就不带头（空 Bearer 只会换来 401）。
+ */
+const bearerAuth = (apiKey: string): Record<string, string> =>
+  apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {}
+
+/**
+ * 官方接口的鉴权（与聊天同源）：
+ * - 渠道里显式填了 Key → 用这把 Key
+ * - 登录了 DeepSeek 账号 → x-dsh-auth-token（走账号额度，与聊天、余额接口一致）
+ * - 都没有 → Bearer 主 Key；主 Key 也没有就不带头
+ */
+const officialAuth = (apiKey: string, explicitKey?: string): Record<string, string> => {
+  if (explicitKey?.trim()) {
+    return bearerAuth(explicitKey)
+  }
+  const token = accountToken()
+  if (token) {
+    return { 'x-dsh-auth-token': token }
+  }
+  return bearerAuth(apiKey)
+}
 /**
  * DeepSeek tools 接口地址。
  * 允许用户把渠道地址填成 `https://api.deepseek.com`、`…/v1` 或带结尾斜杠，
@@ -67,7 +90,7 @@ export const transcribe = async (
     const key = useCustom.apiKey.trim() || apiKey
     const response = await request(url, {
       method: 'POST',
-      headers: key ? { Authorization: `Bearer ${key}` } : {},
+      headers: bearerAuth(key),
       body: form,
       signal,
     })
@@ -93,7 +116,7 @@ export const transcribe = async (
   const key = useCustom?.apiKey.trim() || apiKey
   const response = await request(`${toolsBaseUrl(origin)}/asr`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
+    headers: officialAuth(apiKey, key),
     body: form,
     signal,
   })
@@ -138,7 +161,7 @@ export const synthesize = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+        ...bearerAuth(key),
       },
       body: JSON.stringify({
         model: useCustom.model.trim() || 'tts-1',
@@ -169,7 +192,7 @@ export const synthesize = async (
   const key = useCustom?.apiKey.trim() || apiKey
   const response = await request(`${toolsBaseUrl(origin)}/tts`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    headers: { ...officialAuth(apiKey, key), 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice_id: voice, format: 'pcm', filter_markdown: true }),
     signal,
   })

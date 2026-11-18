@@ -20,6 +20,7 @@ const pkg = JSON.parse(read('package.json'))
 const gradle = read('android/app/build.gradle')
 const zh = read('src/i18n/zh.ts')
 const en = read('src/i18n/en.ts')
+const account = read('src/services/account.ts')
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -75,6 +76,21 @@ check('i18n 双语键一致', (() => {
   return keys(zh) === keys(en)
 })())
 check('新增 i18n 键齐全', ['providerOfficialLocked', 'providerOfficialLockedToast', 'updateAnnouncementEntryLabel', 'sponsorEntryLabel', 'sponsorPageIntro'].every((k) => zh.includes(`  ${k}:`)))
+
+console.log('\n六、语音走账号额度与压缩提示（2.7.2）')
+const speech = read('src/services/api/speech.ts')
+check('speech 引入 accountToken', speech.includes("import { accountToken } from '../account.js'"))
+check('官方语音接口认 x-dsh-auth-token', /officialAuth[\s\S]{0,600}x-dsh-auth-token/.test(speech))
+check('渠道显式 Key 优先于账号 token', /officialAuth[\s\S]{0,200}explicitKey\?\.trim\(\)[\s\S]{0,200}bearerAuth/.test(speech))
+check('账号 token 存在时优先于主 Key', /officialAuth[\s\S]{0,500}accountToken\(\)[\s\S]{0,300}bearerAuth\(apiKey\)/.test(speech))
+check('ASR 走 officialAuth', /\/asr[\s\S]{0,300}officialAuth/.test(speech))
+check('TTS 走 officialAuth', /\/tts[\s\S]{0,300}officialAuth/.test(speech))
+check('账号 token 导出可用', account.includes('export const accountToken'))
+const compaction = read('src/services/chat/compaction.ts')
+check('摘要输入有总体积上限', compaction.includes('SUMMARY_INPUT_TOTAL_MAX'))
+check('压缩提示文案已加', zh.includes('contextCompactingHint') && en.includes('contextCompactingHint'))
+check('压缩中状态暴露给 UI', store.includes('compacting: Record<string, boolean>') && store.includes("compacting: { ...state.compacting"))
+check('等待点旁显示压缩提示', read('src/components/messages/AssistantMessage.tsx').includes('contextCompactingHint'))
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

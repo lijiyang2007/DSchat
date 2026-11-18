@@ -54,6 +54,8 @@ const COMPACT_TARGET_RATIO = 0.5
 export const SUMMARY_MAX_CHARS = 3000
 /** 每轮提问/回答在摘要输入里的截断长度 */
 const SUMMARY_INPUT_CLIP = 900
+/** 摘要输入的总体积硬上限（字符）：导入的超长对话也不会把压缩请求自己撑爆 */
+const SUMMARY_INPUT_TOTAL_MAX = 240_000
 /** 至少要有这么多轮才值得压缩 */
 const MIN_ROUNDS_TO_COMPACT = 4
 
@@ -199,9 +201,14 @@ export const buildSummaryPrompt = (
     })
     .join('\n\n')
   const previous = previousSummary?.trim()
-  return [previous ? `已有摘要（需要在此基础上续写）：\n${previous}\n` : '', body]
+  const joined = [previous ? `已有摘要（需要在此基础上续写）：\n${previous}\n` : '', body]
     .filter(Boolean)
     .join('\n')
+  // 导入的超长对话一次可能带来几十轮原文；输入总体积再设硬上限，
+  // 超限时从前往后保留（较新的轮次靠后，截掉的是最早的内容），保证压缩请求自身不超限
+  return joined.length > SUMMARY_INPUT_TOTAL_MAX
+    ? `${joined.slice(-SUMMARY_INPUT_TOTAL_MAX)}…`
+    : joined
 }
 
 export const SUMMARY_SYSTEM_PROMPT = `你是对话压缩器。把给定的历史对话压缩成一段可供后续对话直接使用的摘要。

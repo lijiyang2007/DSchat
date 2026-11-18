@@ -5,7 +5,7 @@ import { useIsMobile } from '../../app/viewport.js'
 import { IconEditOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { canContinueReply } from '../../services/chat/reply.js'
-import { continueReply, editAssistantMessage, regenerateReply } from '../../services/chat/store.js'
+import { continueReply, editAssistantMessage, regenerateReply, useChatStore } from '../../services/chat/store.js'
 import { useSettings } from '../../services/settings.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { AssistantMessage as AssistantMessageType } from '../../services/chat/types.js'
@@ -73,6 +73,8 @@ export const AssistantMessage = memo(function AssistantMessage({
   const totalTokens = inputTokens + outputTokens
   const waiting =
     streaming && view.steps.length === 0 && !view.answer && !message.thinking
+  // 发送前正在压缩长历史（导入的长对话首次发送时）：等待点旁边给出明确提示，避免像卡死
+  const compacting = useChatStore((state) => Boolean(state.compacting[sessionId]))
   const summaryEntry = `${message.id}-summary`
 
   const [editing, setEditing] = useState(false)
@@ -158,6 +160,9 @@ export const AssistantMessage = memo(function AssistantMessage({
               {[0, 1, 2].map((index) => (
                 <span key={index} className={styles.waitingDot} />
               ))}
+              {compacting ? (
+                <span className={styles.compactingHint}>{t('contextCompactingHint')}</span>
+              ) : null}
             </div>
           ) : null}
           {notice?.presentation === 'response' ? (
