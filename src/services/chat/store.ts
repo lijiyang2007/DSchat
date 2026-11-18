@@ -47,6 +47,7 @@ import {
   toRequestMessages,
 } from './reply.js'
 import {
+  listTime,
   toSessionSummary,
   type AssistantMessage,
   type FileAttachment,
@@ -115,13 +116,13 @@ export const useChatStore = create<ChatState>(() => ({
 
 const { getState: get, setState: set } = useChatStore
 
-/** 置顶的永远在前，其余按最近更新排序 */
+/** 置顶的永远在前，其余按最近活动排序（导入的会话按 importedAt 排最前） */
 const sortSessions = (sessions: SessionSummary[]) =>
   [...sessions].sort((a, b) => {
     if (Boolean(a.pinned) !== Boolean(b.pinned)) {
       return a.pinned ? -1 : 1
     }
-    return b.updatedAt - a.updatedAt
+    return listTime(b) - listTime(a)
   })
 
 const getSession = (id: string) => {
@@ -140,7 +141,8 @@ const sameSummary = (a: SessionSummary, b: SessionSummary) =>
   a.updatedAt === b.updatedAt &&
   Boolean(a.pinned) === Boolean(b.pinned) &&
   Boolean(a.archived) === Boolean(b.archived) &&
-  (a.archivedAt ?? 0) === (b.archivedAt ?? 0)
+  (a.archivedAt ?? 0) === (b.archivedAt ?? 0) &&
+  (a.importedAt ?? 0) === (b.importedAt ?? 0)
 
 const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
@@ -449,10 +451,18 @@ const waitForIdle = (sessionId?: string) =>
   })
 
 /**
- * 替换历史对话：先写入暂存，成功后原子替换旧记录；写入为空即删除全部会话与附件。
+ * 写入历史数据（v2.8.7 起支持「合并」与「替换」两种语义）。
+ *
+ * - merge：导入。暂存里的会话并进现有记录，**原有会话全部保留**，只覆盖 ID 相同的
+ *   （重复导入同一个包）。导入的会话带 importedAt，列表里排最前。
+ * - replace：清空历史（write 为空即删除全部会话与附件）。
+ *
  * 期间停止生成并禁止修改会话；失败时清除暂存，保留原有记录。
  */
-export const replaceHistory = async (write: () => Promise<void>): Promise<number> => {
+export const replaceHistory = async (
+  write: () => Promise<void>,
+  mode: 'merge' | 'replace' = 'replace'
+): Promise<number> => {
   if (get().importingHistory) {
     throw new Error('History replacement is already in progress')
   }
@@ -461,7 +471,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     for (const controller of Object.values(get().streaming)) {
       controller.abort()
     }
-    // 已开始的单条删除先同步到内存，避免本次替换失败后列表残留已被删除的记录。
+    // 已开始的单条删除先同步到内存，避免本次写入失败后列表残留已被删除的记录。
     await Promise.all(deletionTasks)
     historyEpoch += 1
     initTask = undefined
@@ -471,10 +481,34 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     let summaries: SessionSummary[]
     try {
       await write()
-      summaries = await db.commitStaging()
+      summaries = await db.commitStaging(mode)
     } catch (error) {
-      await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
+      await db.clearStaging().catch(db.reportStorageError('clear unfinished history import'))
       throw error
+    }
+    if (mode === 'merge') {
+      // 合并导入：把原有会话也读回来一起排序，否则列表只剩新导入的那批。
+      // 详情缓存里可能有未落盘的改动，合并后统一作废重读，避免内存与库不一致。
+      const merged = await db.loadSessionSummaries()
+      sessionAccess.clear()
+      unsavedSessions.clear()
+      pendingFiles.clear()
+      set({
+        ready: true,
+        initError: false,
+        sessions: sortSessions(merged),
+        sessionCache: {},
+        sessionLoadErrors: {},
+        sessionSaveErrors: {},
+      })
+      // 保留当前打开的会话（如果它属于原有记录），并重新读一次
+      const { activeId } = get()
+      if (activeId !== null && merged.some((summary) => summary.id === activeId)) {
+        void ensureSessionLoaded(activeId)
+      } else if (activeId !== null) {
+        set({ activeId: null })
+      }
+      return summaries.length
     }
     sessionAccess.clear()
     unsavedSessions.clear()

@@ -123,6 +123,8 @@ export const importArchive = async (
   }
   const imported = new Set<string>()
   const images = new Map<string, string>()
+  /** 本次导入的时间戳：所有导入会话共用一个，保证它们按包内顺序聚在列表最前 */
+  const importStartedAt = Date.now()
   /** 已保存的原件：文件 ID → MIME。同一图片出现在多个会话目录时只保存一次。 */
   const stored = new Map<string, string>()
   let manifest = false
@@ -203,6 +205,8 @@ export const importArchive = async (
           fail('backupIncomplete')
         }
         imported.add(sessionId)
+        // v2.8.7：导入的会话打上导入时间，列表里排最前（原始 updatedAt 保持不变）
+        local.session.importedAt = importStartedAt
         for (const [imagePath, id] of local.images) {
           images.set(imagePath, id)
         }

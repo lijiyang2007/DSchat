@@ -135,6 +135,11 @@ export type Session = {
   archived?: boolean
   /** 归档时间，用于归档页按归档先后排序 */
   archivedAt?: number
+  /**
+   * 导入时间（v2.8.7）：导入的会话据此排在列表最前，方便立刻找到。
+   * 原始 updatedAt 保持不变；用户在该会话里继续聊之后，listTime 自然回到真实更新时间。
+   */
+  importedAt?: number
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */
@@ -145,7 +150,19 @@ export type SessionSummary = Pick<Session, 'id' | 'title' | 'createdAt' | 'updat
   archived?: boolean
   /** 归档时间 */
   archivedAt?: number
+  /** 导入时间：让刚导入的会话排在列表最前，见 Session.importedAt */
+  importedAt?: number
 }
+
+/**
+ * 会话在列表里的排序/分组时间（v2.8.7）。
+ *
+ * 导入的会话原始 updatedAt 可能是几个月前，直接按它排会被埋进历史里找不到；
+ * 所以取 updatedAt 与 importedAt 的较大值：导入后立刻排最前，
+ * 一旦用户在这个会话里继续聊（updatedAt 超过 importedAt），自动回到正常时间线。
+ */
+export const listTime = (session: { updatedAt: number; importedAt?: number }): number =>
+  Math.max(session.updatedAt, session.importedAt ?? 0)
 
 /** 显式提取字段，避免将完整会话的消息带进列表。 */
 export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
@@ -156,4 +173,5 @@ export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
   ...(session.pinned ? { pinned: true } : {}),
   ...(session.archived ? { archived: true } : {}),
   ...(session.archivedAt ? { archivedAt: session.archivedAt } : {}),
+  ...(session.importedAt ? { importedAt: session.importedAt } : {}),
 })

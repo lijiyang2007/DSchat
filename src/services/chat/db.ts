@@ -239,10 +239,18 @@ export const updateStagingFileTypes = async (types: ReadonlyMap<string, string>)
 }
 
 /**
- * 导入完成后用暂存替换正式数据：同一事务中替换会话、摘要和原件，并清空暂存。
- * 逐条游标复制，同一时间只读取一条记录；事务失败时整体回滚，正式数据不变。
+ * 把暂存写入正式数据（v2.8.7 起支持两种模式）。
+ *
+ * - `merge`（导入）：把暂存里的会话/摘要/原件**并进**正式存储，已有会话保留不动，
+ *   只有 ID 相同的（重复导入同一个包）才被新版本覆盖。
+ * - `replace`（清空历史）：先清空正式存储再写入，写入为空即删除全部会话与附件。
+ *
+ * 两种模式都在同一事务内完成并清空暂存；事务失败时整体回滚，正式数据不变。
+ * 逐条游标复制，同一时间只读取一条记录。
  */
-export const commitStaging = async (): Promise<SessionSummary[]> => {
+export const commitStaging = async (
+  mode: 'merge' | 'replace' = 'merge'
+): Promise<SessionSummary[]> => {
   const summaries: SessionSummary[] = []
   const tx = (await getDB()).transaction(
     ['sessions', 'sessionSummaries', 'files', 'sessionsStaging', 'filesStaging'],
@@ -251,9 +259,12 @@ export const commitStaging = async (): Promise<SessionSummary[]> => {
   const move = async (from: 'sessionsStaging' | 'filesStaging', to: 'sessions' | 'files') => {
     try {
       const target = tx.objectStore(to)
-      await target.clear()
-      if (to === 'sessions') {
-        await tx.objectStore('sessionSummaries').clear()
+      if (mode === 'replace') {
+        // 清空历史：先抹掉正式数据（导入是 merge，不会走到这里）
+        await target.clear()
+        if (to === 'sessions') {
+          await tx.objectStore('sessionSummaries').clear()
+        }
       }
       for (
         let cursor = await tx.objectStore(from).openCursor();
@@ -269,7 +280,7 @@ export const commitStaging = async (): Promise<SessionSummary[]> => {
       }
       await tx.objectStore(from).clear()
     } catch (error) {
-      // 同步抛出的错误不会让事务自动回滚，需显式中止，避免只提交清空和部分移入。
+      // 同步抛出的错误不会让事务自动回滚，需显式中止，避免只提交部分移入。
       abortTransaction(tx)
       throw error
     }

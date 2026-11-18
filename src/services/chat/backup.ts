@@ -72,8 +72,11 @@ export const exportSession = (sessionId: string): Promise<{ name: string; blob: 
   })
 
 /**
- * 确认覆盖后调用：先检查 ZIP 格式与版本，校验失败时保留正在生成的回答；
- * 通过后从 ZIP 流式写入暂存，成功才替换原有会话与图片原件。返回导入的会话数。
+ * 导入历史对话（v2.8.7 起是**合并**，不再覆盖）。
+ *
+ * 先检查 ZIP 格式与版本，校验失败时保留正在生成的回答；通过后从 ZIP 流式写入暂存，
+ * 成功才把新会话并进本地库。**原有会话与附件全部保留**，导入的会话排在列表最前。
+ * 返回本次导入的会话数。
  */
 export const importHistory = (
   file: File,
@@ -82,11 +85,11 @@ export const importHistory = (
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
     const rootPrefix = await checkArchiveFormat(file)
-    return replaceHistory(() => importArchive(file, onProgress, rootPrefix))
+    return replaceHistory(() => importArchive(file, onProgress, rootPrefix), 'merge')
   })
 
 /** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */
 export const clearHistory = (): Promise<void> =>
   enqueueBackup(async () => {
-    await replaceHistory(async () => {})
+    await replaceHistory(async () => {}, 'replace')
   })

@@ -1128,7 +1128,7 @@ const TtsVoiceSetting = () => {
   )
 }
 
-/** 瑕嗙洊瀵煎叆鐨勪簩娆＄‘璁わ紝鍙犲湪璁剧疆寮圭獥涓?*/
+/** 导入确认弹窗（v2.8.7 起导入是追加，不再是危险操作，按钮改回普通样式） */
 const ImportConfirm = ({
   historyImport,
 }: {
@@ -1145,7 +1145,7 @@ const ImportConfirm = ({
           <Button variant="outlined" size="m" autoFocus onClick={historyImport.cancel}>
             {t('cancel')}
           </Button>
-          <Button variant="dangerOutlined" size="m" onClick={() => void historyImport.confirm()}>
+          <Button size="m" onClick={() => void historyImport.confirm()}>
             {t('historyImportConfirm')}
           </Button>
         </>
@@ -1272,7 +1272,7 @@ const useHistoryImport = () => {
         }
       })
       const successStatus: Status = {
-        key: count === 1 ? 'historyImportedOne' : 'historyImported',
+        key: 'historyImportedKept',
         params: { count },
       }
       setStatus(successStatus)

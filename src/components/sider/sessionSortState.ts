@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SessionSummary } from '../../services/chat/types.js'
+import { listTime, type SessionSummary } from '../../services/chat/types.js'
 
 /** 会话目录的排序方式 */
 export type SessionSort = 'updatedAt' | 'createdAt' | 'title'
@@ -28,7 +28,11 @@ export const setSessionSort = (sort: SessionSort) => {
   }
 }
 
-/** 按当前排序方式排列会话；置顶始终在最前 */
+/**
+ * 按当前排序方式排列会话；置顶始终在最前。
+ * 按更新时间排时用 listTime（updatedAt 与 importedAt 取较大值），
+ * 让刚导入的会话立刻排到最前，见 types.ts 的 listTime 注释。
+ */
 export const sortSessions = (sessions: SessionSummary[], sort: SessionSort): SessionSummary[] => {
   const pinned = sessions.filter((session) => session.pinned)
   const rest = sessions.filter((session) => !session.pinned)
@@ -39,7 +43,7 @@ export const sortSessions = (sessions: SessionSummary[], sort: SessionSort): Ses
     if (sort === 'createdAt') {
       return b.createdAt - a.createdAt
     }
-    return b.updatedAt - a.updatedAt
+    return listTime(b) - listTime(a)
   }
   return [...pinned.sort(compare), ...rest.sort(compare)]
 }
