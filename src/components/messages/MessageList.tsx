@@ -30,8 +30,6 @@ const getUploadRetryId = (messages: Message[], streaming: boolean) => {
 }
 import styles from './MessageList.module.css'
 
-/** 距底部小于该值时视为在底部，流式内容增长时跟随 */
-const STICKY_THRESHOLD = 40
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 /** 消息数超过这个值时启用视口外跳过渲染，避免长会话卡顿 */
 const VIRTUALIZE_THRESHOLD = 30
@@ -50,7 +48,9 @@ export const MessageList = ({
   const [summaryOpen, setSummaryOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const stickyRef = useRef(true)
+  // 不自动跟随底部：AI 流式输出时用户视角停在哪就留在哪，新文字在下方累积。
+  // 恒为 false → scrollToBottom() 的守卫始终拦截自动滚动（见下方 scrollToBottom）。
+  const stickyRef = useRef(false)
   const scrollTopRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
   const messages = getVisibleMessages(session)
@@ -100,9 +100,22 @@ export const MessageList = ({
       restoreScrollRef.current = null
       return
     }
-    stickyRef.current = true
-    scrollToBottom()
-  }, [session.id, lastMessageId, scrollToBottom])
+    // 新消息（lastMessageId 变化）不再强制恢复跟随——这是「生成时不自动滚动」的关键。
+  }, [session.id, lastMessageId])
+
+  // 切换会话时一次性滚到底部（绕过 stickyRef），让用户直接看到最新消息；
+  // 这与「流式生成不跟随」不冲突：只认 session.id，不认 lastMessageId。
+  const lastSessionIdRef = useRef(session.id)
+  useLayoutEffect(() => {
+    if (lastSessionIdRef.current !== session.id) {
+      lastSessionIdRef.current = session.id
+      const el = scrollRef.current
+      if (el) {
+        el.scrollTop = el.scrollHeight
+        scrollTopRef.current = el.scrollTop
+      }
+    }
+  }, [session.id])
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
 
@@ -131,13 +144,8 @@ export const MessageList = ({
       el.scrollTop = scrollTopRef.current
     }
     const onScroll = () => {
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICKY_THRESHOLD
-      // 仅在用户向上滚动时停止跟随底部，布局或内容增高时保持跟随状态。
-      if (nearBottom) {
-        stickyRef.current = true
-      } else if (el.scrollTop < scrollTopRef.current) {
-        stickyRef.current = false
-      }
+      // 只记录用户当前水位；不再因为「滚回底部」就恢复跟随。
+      // 自动滚动统一由 stickyRef（恒 false）拦截，避免生成时把视角拽到底。
       scrollTopRef.current = el.scrollTop
     }
     el.addEventListener('scroll', onScroll, { passive: true })

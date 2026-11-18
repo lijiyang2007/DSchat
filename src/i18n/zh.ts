@@ -241,6 +241,7 @@ export const zh = {
   thinkingEffortMaxShort: '最高强度',
   thinkingEffortTooltip: '点击切换思考程度（当前：{level}）',
   thinkingProQuotaHint: '已切换到 Pro 模型，将更快消耗额度',
+  visionFlashFallback: '图片/文件需用 Flash 模型识别，已自动切换',
   thinkingOnToast: '深度思考已开启',
   thinkingOffToast: '深度思考已关闭',
   searchOnToast: '智能搜索已开启',

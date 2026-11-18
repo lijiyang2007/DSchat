@@ -1573,8 +1573,28 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         // DeepSeek 原生协议 off 返回空对象，由 thinking.type=disabled 关闭。
         const effort = settings.thinkingEffort
         const thinkingEnabled = effort !== 'off'
+        const selectedModel = initial.model ?? (settings.model.trim() || MODEL)
+        let requestModel = selectedModel
+        /**
+         * v2.8.2：官方 pro 模型在开启思考时不支持图片/文件输入——服务端会把图片
+         * 变成 "[Unsupported Image]"，或直接报 "images are not supported by this model"。
+         * 2.7.8 加的「深度思考自动切 pro」会让用户开着思考发图时踩这个坑。
+         * 这里按官方模型能力兜底：官方协议 + 本轮带图片/文件 + 当前是 pro → 用回 flash
+         * （flash 同时支持图片与思考），保证图片/文件能被识别。
+         */
+        if (settings.chatProtocol === 'deepseek') {
+          const hasMedia = messages.some(
+            (message) =>
+              typeof message.content !== 'string' &&
+              message.content.some((block) => block.type === 'image' || block.type === 'document')
+          )
+          if (hasMedia && /pro/i.test(requestModel)) {
+            requestModel = 'deepseek-flash'
+            showToast({ key: 'visionFlashFallback' })
+          }
+        }
         const requestBody: CreateMessageRequest = {
-          model: initial.model ?? (settings.model.trim() || MODEL),
+          model: requestModel,
           ...(system ? { system } : {}),
           messages,
           thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },

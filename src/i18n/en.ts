@@ -251,6 +251,7 @@ export const en = {
   thinkingEffortMaxShort: 'Max',
   thinkingEffortTooltip: 'Click to change thinking effort (current: {level})',
   thinkingProQuotaHint: 'Switched to the Pro model; it uses your quota faster',
+  visionFlashFallback: 'Images/files need the Flash model, switched automatically',
   thinkingOnToast: 'Thinking enabled',
   thinkingOffToast: 'Thinking disabled',
   searchOnToast: 'Web search enabled',
