@@ -11,6 +11,7 @@ const entries = {
   sessionSearch: 'src/services/chat/sessionSearch.ts',
   origin: 'src/services/api/origin.ts',
   vision: 'src/services/vision.ts',
+  imageNormalize: 'src/services/imageNormalize.ts',
   welcome: 'src/services/chat/welcome.ts',
   sessionSort: 'src/components/sider/sessionSortState.ts',
 }

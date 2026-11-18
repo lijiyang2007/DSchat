@@ -3,6 +3,7 @@ import type { LinkedMessage, TranslationMessage } from '../i18n/index.js'
 import { uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
+import { normalizeImageIfNeeded } from './imageNormalize.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
 
 /** 允许上传的扩展名，按扩展名白名单过滤，清单见 uploadExts.ts */
@@ -184,6 +185,27 @@ const enqueueUpload = (
   })
 
 /**
+ * 上传图片前按官方 Vision 限制归一化：格式冷门（bmp/tiff/avif…）或尺寸超限的图片
+ * 转成 WebP 再上传，避免 Files API 报 "unsupported / too large"。归一化失败退回原件。
+ */
+const uploadBlob = async (
+  apiKey: string,
+  id: string,
+  blob: Blob,
+  name: string,
+  isImage: boolean,
+  signal: AbortSignal
+): Promise<string> => {
+  if (!isImage) {
+    return enqueueUpload(apiKey, blob, name, false, signal)
+  }
+  const { blob: normalized, mimeType } = await normalizeImageIfNeeded(blob, blob.type, id)
+  const body =
+    normalized instanceof File ? normalized : new File([normalized], name, { type: mimeType })
+  return enqueueUpload(apiKey, body, name, true, signal)
+}
+
+/**
  * 上传任务按附件的本地 id 登记：输入框选中即开始上传，全部成功后携带 serverId 发送，
  * 不会重复上传；导入的历史附件没有任务，发送前按本地原件补传。
  * 任务只在内存里，历史附件补传未完成时，刷新后会在下次请求前重新上传。
@@ -220,7 +242,7 @@ export const uploadAttachment = (
   }
   const controller = new AbortController()
   setTask(id, { status: 'uploading' })
-  const promise = enqueueUpload(apiKey, blob, name, isImage, controller.signal)
+  const promise = uploadBlob(apiKey, id, blob, name, isImage, controller.signal)
     .then((serverId) => {
       setTask(id, { status: 'done', serverId })
       return serverId

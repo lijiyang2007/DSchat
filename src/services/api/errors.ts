@@ -80,6 +80,24 @@ export const extractFileIds = (message: string): string[] => [
   ...new Set(message.match(/file-api-[\w-]+/g) ?? []),
 ]
 
+/**
+ * 服务端拒绝图片本身的情况：尺寸超限（"too large to process"）或格式不受支持。
+ * 两条都意味着「原字节发不出去」：把对应附件的 serverId 清掉，下一次请求会先归一化再补传。
+ */
+const IMAGE_REJECT_PATTERNS = [
+  /The image is too large to process/i,
+  /You have uploaded an (unsupported|invalid) (file|image)/i,
+  /image .* exceeds .* (dimension|pixel)/i,
+]
+
+/** 判定 400 报错是否为图片内容被拒（区别于 file_id 失效） */
+export const isImageRejectedError = (error: unknown): boolean => {
+  if (!(error instanceof ApiError) || error.status !== 400) {
+    return false
+  }
+  return IMAGE_REJECT_PATTERNS.some((pattern) => pattern.test(error.message))
+}
+
 /** 上传失败里能识别出具体原因的情况；其余统一按「上传失败」处理 */
 export type UploadErrorCode = 'fileCountLimit' | 'storageLimit' | 'parseFailed'
 

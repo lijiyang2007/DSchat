@@ -11,8 +11,9 @@ import {
 } from '../api/openai.js'
 import { getApiOrigin } from '../api/origin.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
-import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
+import { extractFileIds, getFileErrorCode, isImageRejectedError, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import { normalizeImageIfNeeded, markImageRejected } from '../imageNormalize.js'
 import { allowsVision, matchesRefusalKeyword, useSettings } from '../settings.js'
 import { toggleReadAloud } from '../speech/readAloud.js'
 import { recordTurnTokenUsage } from '../tokenUsage.js'
@@ -1131,16 +1132,21 @@ const collectServerFileIds = (request: Request): Set<string> => {
 }
 
 /**
- * 服务端判定 file_id 失效时，清掉对应附件的 serverId 并丢弃旧的上传任务，
- * 下一次补齐会重新读取本地原件上传。报错里点名了 file_id 就只重置这些，
- * 没点名（如 invalid file_id）则重置本次请求用到的全部附件。
+ * 服务端判定 file_id 失效或图片内容被拒（超限/格式不支持）时，清掉对应附件的 serverId
+ * 并丢弃旧的上传任务，下一次补齐会重新读取本地原件上传——图片路径现在会先归一化再传。
+ * 报错里点名了 file_id 就只重置这些，没点名（如 invalid file_id / 图片超限）则重置本次请求用到的全部附件。
  */
 const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: unknown): boolean => {
-  if (!(error instanceof ApiError) || !getFileErrorCode(error)) {
+  if (!(error instanceof ApiError)) {
     return false
   }
-  const mentioned = extractFileIds(error.message)
-  // 重试时原始快照里还是上一轮已被清掉的 serverId，先换成会话里的最新消息
+  const imageRejected = isImageRejectedError(error)
+  if (!imageRejected && !getFileErrorCode(error)) {
+    return false
+  }
+  const mentioned = imageRejected ? [] : extractFileIds(error.message)
+  // 重试时原始快照里还是上一轮已被清掉的 serverId，先换成会话里的最新消息；
+  // 图片被拒（超限/格式）时重置本次请求用到的全部图片附件，归一化后补传。
   const targets =
     mentioned.length > 0
       ? new Set(mentioned)
@@ -1167,6 +1173,10 @@ const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: un
   })
   if (localIds.length === 0) {
     return false
+  }
+  // 图片被服务端拒过（超限/格式）：标记后下次发送强制归一化，不再按头部判定直传
+  if (imageRejected) {
+    localIds.forEach(markImageRejected)
   }
   updateSession(sessionId, (current) => ({ ...current, messages }))
   // 上传任务里可能还留着同一个失效的 serverId，清掉后 ensureServerId 才会重新上传
@@ -1238,7 +1248,10 @@ const prepareInlineAttachments = async (
 
     // 图片与文档都交给原模型处理，不再有独立的识图 / OCR 渠道
     if (file.isImage) {
-      const dataUrl = await blobToDataUrl(blob)
+      // 先按官方 Vision 限制归一化（冷门格式转 WebP、超大图等比缩小），
+      // 失败时退回原件；base64 内联路径必须走这里，避免 48MiB 请求体与 8192px 限制报错。
+      const normalized = await normalizeImageIfNeeded(blob, file.mimeType, file.id)
+      const dataUrl = await blobToDataUrl(normalized.blob)
       const modelSeesImages = allowsVision(
         settings.visionSupport,
         settings.model,
