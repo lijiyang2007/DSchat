@@ -19,6 +19,7 @@ import { ReadAloudButton } from './ReadAloudButton.js'
 import { CopyButton } from './CopyButton.js'
 import { ReplyArea } from './ReplyArea.js'
 import { useReplyView } from './useReplyView.js'
+import { useTypewriter } from '../markdown/useTypewriter.js'
 import {
   BranchSwitcher,
   type MessageVersions,
@@ -75,6 +76,12 @@ export const AssistantMessage = memo(function AssistantMessage({
     streaming && view.steps.length === 0 && !view.answer && !message.thinking
   // 发送前正在压缩长历史（导入的长对话首次发送时）：等待点旁边给出明确提示，避免像卡死
   const compacting = useChatStore((state) => Boolean(state.compacting[sessionId]))
+  // 非流式回答按固定字速逐字揭示（参考官方 chat-demo 流式观感），尾部带闪烁光标
+  const revealed = useTypewriter(
+    answer?.markdown ?? '',
+    streaming && Boolean(answer),
+    message.id
+  )
   const summaryEntry = `${message.id}-summary`
 
   const [editing, setEditing] = useState(false)
@@ -148,11 +155,12 @@ export const AssistantMessage = memo(function AssistantMessage({
           {answer ? (
             <Markdown
               className="ds-assistant-message-main-content"
-              content={answer.markdown}
+              content={revealed}
               loading={streaming}
               cacheKey={message.id}
               disableLink={false}
               sources={view.sources}
+              revealKey={message.id}
             />
           ) : null}
           {waiting ? (

@@ -89,13 +89,15 @@ const Table = memo(function Table({ node }: { node: TableNode }) {
 
 const MarkdownPhrasingContent = memo(function MarkdownPhrasingContent({
   nodes,
+  caret,
 }: {
   nodes: PhrasingContent[]
+  caret?: boolean
 }) {
   return (
     <>
       {nodes.map((node, index) => {
-        return <MarkdownPhrasingContentItem key={index} node={node} />
+        return <MarkdownPhrasingContentItem key={index} node={node} caret={caret} />
       })}
     </>
   )
@@ -103,8 +105,10 @@ const MarkdownPhrasingContent = memo(function MarkdownPhrasingContent({
 
 const MarkdownPhrasingContentItem = memo(function MarkdownPhrasingContentItem({
   node,
+  caret,
 }: {
   node: PhrasingContent
+  caret?: boolean
 }) {
   switch (node.type) {
     case 'inlineMath':
@@ -136,7 +140,7 @@ const MarkdownPhrasingContentItem = memo(function MarkdownPhrasingContentItem({
         </strong>
       )
     case 'text':
-      return <TextContent>{node.value}</TextContent>
+      return <TextContent caret={caret}>{node.value}</TextContent>
     case 'citation':
       return <CitationLink source={node.source} />
     default:
@@ -146,12 +150,24 @@ const MarkdownPhrasingContentItem = memo(function MarkdownPhrasingContentItem({
 })
 
 // 按 \n 拆行插 <br>：源文每个换行（含软换行）都渲染为视觉换行
-const TextContent = memo(function TextContent({ children }: { children: string }) {
+const TextContent = memo(function TextContent({
+  children,
+  caret,
+}: {
+  children: string
+  caret?: boolean
+}) {
   const result: ReactNode[] = []
   children.split(/\r?\n/).forEach((line, index) => {
     result.push(<span key={index + 's'}>{line}</span>, <br key={index + 'br'} />)
   })
   result.pop()
+  // 揭示中的最后一段文本后放闪烁光标（新增字淡入由 CSS 动画类承载）
+  if (caret && result.length > 0) {
+    result.push(
+      <span key="caret" className="ds-typewriter-caret" aria-hidden />
+    )
+  }
   return result
 })
 
@@ -159,9 +175,11 @@ const MarkdownBlockContentOrDefinitionContent = memo(
   function MarkdownBlockContentOrDefinitionContent({
     nodes,
     loading,
+    caret,
   }: {
     nodes: Array<BlockContent | DefinitionContent>
     loading: boolean
+    caret?: boolean
   }) {
     return nodes.map((node, index) => {
       switch (node.type) {
@@ -188,7 +206,7 @@ const MarkdownBlockContentOrDefinitionContent = memo(
         case 'paragraph':
           return (
             <p key={index} className="ds-markdown-paragraph">
-              <MarkdownPhrasingContent nodes={node.children} />
+              <MarkdownPhrasingContent nodes={node.children} caret={caret} />
             </p>
           )
         case 'code':
@@ -217,10 +235,13 @@ export const MarkdownAstRenderer = memo(function MarkdownAstRenderer({
   onUpdate,
   className,
   loading = false,
+  caret = false,
 }: {
   ast: Root
   className?: string
   loading?: boolean
+  /** 揭示中：最后一段正文文本后放闪烁光标 */
+  caret?: boolean
   /**
    * layoutEffect 之后触发 -> 进行页面滚动
    */
@@ -239,9 +260,10 @@ export const MarkdownAstRenderer = memo(function MarkdownAstRenderer({
         <MarkdownBlockContentOrDefinitionContent
           nodes={ast.children as Array<BlockContent | DefinitionContent>}
           loading={loading}
+          caret={caret}
         />
       </div>
     ),
-    [className, ast.children, loading]
+    [className, ast.children, loading, caret]
   )
 })

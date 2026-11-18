@@ -3,6 +3,35 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* 固定字速揭示（参考官方 chat-demo 流式观感）：
+   揭示中的最后一段正文后放闪烁光标 */
+.ds-typewriter-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background-color: var(--dsw-alias-label-primary);
+  animation: ds-typewriter-blink 1s steps(1) infinite;
+}
+
+@keyframes ds-typewriter-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-typewriter-caret {
+    animation: none;
+  }
+}
+
 .ds-markdown strong {
   font-weight: 600;
 }

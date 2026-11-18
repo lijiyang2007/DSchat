@@ -67,10 +67,13 @@ check('sponsor 子页已挂进 renderSection', settingsDialog.includes('<Sponsor
 check('赞助页展示名单', sponsorPage.includes('SPONSOR_NAMES.map'))
 check('新增图标 IconHeartOutline16', read('src/components/base/icons.tsx').includes('IconHeartOutline16'))
 
-console.log('\n五、版本规则 v2.7.1')
-check('package.json 2.7.1', pkg.version === '2.7.1')
-check('versionName 2.7.1', gradle.includes("'2.7.1'"))
-check('versionCode 2701', gradle.includes('2701'))
+console.log('\n五、版本号（逢九进位规则下的当前版本）')
+const pkgVersion = pkg.version
+const expectedCode =
+  Number(pkgVersion.split('.')[0]) * 1000 + Number(pkgVersion.split('.')[1]) * 100 + Number(pkgVersion.split('.')[2])
+check(`package.json 与 versionName 一致（${pkg.version}）`, pkg.version === gradle.match(/'(\d+\.\d+\.\d+)'/)?.[1])
+check(`versionName ${pkgVersion}`, gradle.includes(`'${pkgVersion}'`))
+check(`versionCode ${expectedCode} 与版本号对应`, gradle.includes(`: ${expectedCode})`))
 check('i18n 双语键一致', (() => {
   const keys = (src) => [...src.matchAll(/^  (\w+):/gm)].map((m) => m[1]).sort().join(',')
   return keys(zh) === keys(en)
