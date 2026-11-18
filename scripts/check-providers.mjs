@@ -158,7 +158,7 @@ check('保留了协议选择', modelSettings.includes("t('chatProtocolLabel')"))
 check('保留了地址设置', modelSettings.includes("t('modelSettingsApiOriginLabel')"))
 check('保留了模型设置', modelSettings.includes("t('modelSettingsModelLabel')"))
 check('保留了片段导入', modelSettings.includes('applyConfigSnippet'))
-check('保留了语音渠道', modelSettings.includes('<CapabilityChannelCard'))
+check('语音渠道卡片已移除（2.7.5 锁死官方账号）', !modelSettings.includes('<CapabilityChannelCard'))
 
 console.log('\n十、i18n 双语齐备')
 const zhKeys = [...zh.matchAll(/^  (\w+):/gm)].map((m) => m[1])

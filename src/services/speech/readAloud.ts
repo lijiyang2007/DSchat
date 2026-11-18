@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { ApiError } from '../api/client.js'
 import { classifyApiError } from '../api/errors.js'
-import { synthesize, TTS_SAMPLE_RATE } from '../api/speech.js'
+import { synthesize, speechAccountReady, speechAccountError, TTS_SAMPLE_RATE } from '../api/speech.js'
 import { useSettings } from '../settings.js'
 
 /**
@@ -155,6 +155,10 @@ export const describeReadAloudError = (error: unknown): TranslationMessage | str
   if (error instanceof ApiError && error.kind === 'protocol') {
     return error.message
   }
+  // 未登录官方账号：语音功能整体锁死时的固定提示
+  if (error instanceof ApiError && error.status === 401) {
+    return { key: 'ttsNeedsAccount' }
+  }
   // 400 表示这段正文服务端无法合成，与其余失败区分开
   if (error instanceof ApiError && error.status === 400) {
     return { key: 'ttsUnavailable' }
@@ -165,7 +169,7 @@ export const describeReadAloudError = (error: unknown): TranslationMessage | str
   }
   switch (classifyApiError(error)) {
     case 'unauthorized':
-      return { key: 'apiKeyInvalidRetry' }
+      return { key: 'ttsNeedsAccount' }
     case 'insufficientBalance':
       return { key: 'insufficientBalance' }
     case 'rateLimited':
@@ -197,16 +201,20 @@ export const toggleReadAloud = (
   current = { controller, context }
   useReadAloud.setState({ messageId, status: 'loading' })
   // 音色在开始朗读时读取，设置中切换后下一次朗读生效
-  const { apiKey, ttsVoice, ttsChannel } = useSettings.getState()
+  const { ttsVoice } = useSettings.getState()
+  // 语音锁死官方账号（2.7.5）：未登录直接提示，不发请求
+  if (!speechAccountReady()) {
+    finish(controller)
+    onError(speechAccountError())
+    return
+  }
 
   void (async () => {
     try {
       const { stream, isPcm } = await synthesize(
-        apiKey ?? '',
         text,
         ttsVoice,
-        controller.signal,
-        ttsChannel.mode === 'custom' ? ttsChannel : undefined
+        controller.signal
       )
       const { lastSource } = await scheduleTtsStream({
         context,

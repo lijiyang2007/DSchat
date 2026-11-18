@@ -280,6 +280,9 @@ export const en = {
   ttsStop: 'Stop reading',
   ttsUnavailable: 'This answer cannot be read aloud right now',
   ttsFailed: 'Failed to read aloud. Please try again later.',
+  ttsNeedsAccount: 'Speech requires a signed-in DeepSeek account (Settings → Account); usage counts against the account quota',
+  speechRequiresAccount: 'Speech requires a signed-in DeepSeek account — sign in under Settings → Account first',
+  modelSettingsSpeechAccountHint: 'Speech recognition and synthesis are provided by DeepSeek official: just sign in to your account (Settings → Account), no channel setup needed',
   ttsNeedsOfficial:
     'Read aloud uses the official DeepSeek speech API — make sure the main API origin is api.deepseek.com, or fill the official address and key in the TTS channel',
   retry: 'Retry',

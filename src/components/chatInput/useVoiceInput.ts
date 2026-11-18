@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TranslationMessage } from '../../i18n/index.js'
-import { transcribe } from '../../services/api/speech.js'
+import { transcribe, speechAccountReady } from '../../services/api/speech.js'
 import { startRecording, type Recording } from '../../services/speech/recorder.js'
-import { useSettings } from '../../services/settings.js'
 import { showToast } from '../base/toastState.js'
 
 export type VoiceInputStatus = 'idle' | 'recording' | 'transcribing'
@@ -75,13 +74,13 @@ export const useVoiceInput = (onText: (text: string) => void) => {
       controller = new AbortController()
       controllerRef.current = controller
       setStatus('transcribing')
-      const { apiKey, asrChannel } = useSettings.getState()
-      const text = await transcribe(
-        apiKey ?? '',
-        audio,
-        controller.signal,
-        asrChannel.mode === 'custom' ? asrChannel : undefined
-      )
+      // 语音锁死官方账号（2.7.5）：未登录在转写前拦截，提示登录
+      if (!speechAccountReady()) {
+        showToast({ key: 'speechRequiresAccount' })
+        setStatus('idle')
+        return
+      }
+      const text = await transcribe(audio, controller.signal)
       if (controller.signal.aborted || operationRef.current !== operation) {
         return
       }

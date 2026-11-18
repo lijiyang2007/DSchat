@@ -13,7 +13,6 @@ import {
   setApiKey,
   setApiOrigin,
   setAutoCompactContext,
-  setAsrChannel,
   setAutoTitle,
   setChatProtocol,
   setContextWindow,
@@ -35,7 +34,6 @@ import {
   setVisionSupport,
   setTemperature,
   setTopP,
-  setTtsChannel,
   useSettings,
   type ChatProtocol,
   type StreamThrottle,
@@ -44,10 +42,7 @@ import {
 } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
 import { Select, type SelectOption } from '../base/Select.js'
-import {
-  CapabilityChannelCard,
-  ModelFetcherInput,
-} from './ChannelConfigField.js'
+import { ModelFetcherInput } from './ChannelConfigField.js'
 import {
   openProviderEditor,
   useSettingsDialog,
@@ -624,26 +619,9 @@ export const ModelSettings = () => {
       <div className={styles.groupTitle}>{t('modelSettingsSectionChannels')}</div>
       <div className={styles.cell}>
         <div className={styles.field}>
-          <div className={styles.description}>{t('modelSettingsChannelsHint')}</div>
           <div className={styles.description}>{t('modelSettingsChannelsHintAlt')}</div>
-          <div className={styles.description}>{t('modelSettingsSectionChannelsVoiceHint')}</div>
-          <CapabilityChannelCard
-            title={t('channelAsrTitle')}
-            channel={settings.asrChannel}
-            fallbackBaseUrl={mainBaseUrl}
-            fallbackApiKey={mainApiKey}
-            modelPlaceholder="whisper-1"
-            onChange={setAsrChannel}
-          />
-          <CapabilityChannelCard
-            title={t('channelTtsTitle')}
-            channel={settings.ttsChannel}
-            fallbackBaseUrl={mainBaseUrl}
-            fallbackApiKey={mainApiKey}
-            modelPlaceholder="tts-1"
-            withVoice
-            onChange={setTtsChannel}
-          />
+          {/* 语音锁死官方账号（2.7.5）：渠道卡片移除，登录即用 */}
+          <div className={styles.description}>{t('modelSettingsSpeechAccountHint')}</div>
         </div>
       </div>
 

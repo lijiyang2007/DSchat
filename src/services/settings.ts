@@ -327,9 +327,6 @@ const initialChatProtocol = (): ChatProtocol => {
   return 'deepseek'
 }
 
-const initialApiOrigin = read(KEYS.apiOrigin) ?? ''
-setRuntimeApiOrigin(initialApiOrigin)
-
 /**
  * 读取供应商列表。
  *
@@ -401,6 +398,35 @@ const hostLabel = (url: string): string => {
 }
 
 const initialProvidersCache = initialProviders()
+
+/**
+ * 官方条目终态自愈（2.7.5）：2.7.4 只修了 providers 列表，但启动时运行时
+ * API 地址（setRuntimeApiOrigin）与全局扁平键仍从旧坏配置读取——用户停在
+ * 官方条目上时，请求仍打到被改坏的第三方地址（Not Found 的漏网之鱼）。
+ * 这里在 store 初始化前把官方条目的修复结果同步写回扁平键与运行时地址。
+ */
+const repairOfficialRuntimeKeys = (): void => {
+  const official = initialProvidersCache.find((item) => item.id === 'deepseek-official')
+  if (!official) {
+    return
+  }
+  const activeId = read(KEYS.activeProviderId)
+  if (activeId && activeId !== 'deepseek-official') {
+    // 用户正在用第三方供应商：官方条目已修复入库，扁平键保持当前供应商
+    return
+  }
+  // 停在官方（或首次启动）：扁平键与运行时地址一律取修复后的官方配置
+  write(KEYS.chatProtocol, official.protocol)
+  write(KEYS.apiOrigin, official.baseUrl || null)
+  write(KEYS.customHeaders, official.headers || null)
+  write(KEYS.model, official.model || null)
+  setRuntimeApiOrigin(official.baseUrl)
+}
+
+repairOfficialRuntimeKeys()
+
+// 官方自愈可能改写了扁平键（停在官方条目时）：apiOrigin 在修复后读取
+const initialApiOrigin = read(KEYS.apiOrigin) ?? ''
 
 const initialActiveProviderId = (): string => {
   const saved = read(KEYS.activeProviderId)
