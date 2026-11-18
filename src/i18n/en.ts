@@ -42,6 +42,34 @@ export const en = {
   settingsContextUsageEmpty: 'This chat is empty',
   settingsContextUsageTokens: '{used} / {total} tokens',
   settingsContextUsageEstimated: 'No server usage yet — this is estimated from text length',
+  settingsCompactLevelTitle: 'Compaction threshold',
+  settingsCompactLevelFrugal: 'Frugal',
+  settingsCompactLevelEconomy: 'Economy',
+  settingsCompactLevelBalanced: 'Longer memory',
+  settingsCompactLevelMarathon: 'Max memory',
+  settingsCompactLevelFrugalHeadline: 'Compact at 20% — cheapest, but the shortest memory',
+  settingsCompactLevelEconomyHeadline: 'Compact at 40% — the balance point between cost and memory',
+  settingsCompactLevelBalancedHeadline: 'Compact at 60% — remembers more, costs a bit more',
+  settingsCompactLevelMarathonHeadline: 'Compact only at 80% — closest to "remembers everything"',
+  settingsCompactLevelFrugalPro:
+    'Sends the shortest history each turn, so input tokens cost the least and long chats rarely hit the limit. Good for lookups and one-off questions.',
+  settingsCompactLevelFrugalCon:
+    'The model only keeps the latest 2 turns verbatim; everything earlier lives in the summary. Follow-ups about old details may drift, and the summary can drop what you needed.',
+  settingsCompactLevelEconomyPro:
+    'Balances cost and memory: older turns become a summary, the latest 3 stay verbatim. Works for most everyday conversations without hitting limits.',
+  settingsCompactLevelEconomyCon:
+    'Compacts as soon as you reach 40%, so very long chats lose several stretches to summaries. For work that leans on early details (coding, long documents), pick a higher level.',
+  settingsCompactLevelBalancedPro:
+    'Keeps the latest 4 turns verbatim and compacts less often — steadier for coding and long-document editing.',
+  settingsCompactLevelBalancedCon:
+    'Each request carries more history, so input tokens cost more, and very long chats hit the context limit sooner.',
+  settingsCompactLevelMarathonPro:
+    'Keeps the latest 6 turns and only compacts at 80% — the closest thing to "remembers it all". Best for long, coherent reasoning.',
+  settingsCompactLevelMarathonCon:
+    'The most expensive: nearly every turn sends a long history, so input tokens climb noticeably. Extremely long chats still get compacted.',
+  settingsCompactLevelFootnote:
+    'Current level: compacts at {percent}% and keeps the latest {keep} turns verbatim. Your local history is always complete — no message is ever deleted.',
+  settingsCompactLevelThreshold: 'Compaction trigger for the current level: {percent}%',
   settingsAppearanceThemeLabel: 'Theme',
   settingsFontSizeLabel: 'Font size',
   settingsFontSizePreview: 'Preview text size',
@@ -359,10 +387,10 @@ export const en = {
   modelSettingsSectionProtocol: 'Protocol & Tool Toggles',
   modelSettingsAutoCompactLabel: 'Automatic context compaction',
   modelSettingsAutoCompactDesc:
-    'When the conversation nears the model context window (~80%), earlier turns are summarized so long chats can continue. Local history stays intact and remains scrollable',
+    'When the chat reaches {percent}% of the context window (current "{level}" level), earlier turns are summarized so long chats can continue. Local history stays intact and remains scrollable',
   contextUsageLabel: 'Context {percent}%',
   contextUsageHint: 'This chat uses {percent}% of the context window; {compacted}',
-  contextUsageAuto: 'earlier turns are compacted automatically at 80%',
+  contextUsageAuto: 'earlier turns are compacted automatically at {percent}%',
   contextUsageManual: 'auto compaction is off; nearing the limit may cause errors',
   contextCompactedToast: 'Context compacted: earlier turns were summarized',
   contextCompactManualDone: 'Compacted {count} earlier turns; only the latest few stay verbatim',

@@ -882,3 +882,124 @@
   display: inline-flex;
   color: #f5455c;
 }
+
+/* 上下文压缩档位（v2.8.9）：滑块 + 四档标记 + 优缺点说明 */
+.compactLevelCell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 14px;
+}
+
+.compactLevelSlider {
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  margin: 2px 0;
+  accent-color: var(--dsw-alias-brand-primary);
+  background: none;
+  cursor: pointer;
+}
+
+.compactLevelSlider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.compactLevelMarks {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.compactLevelMark {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.compactLevelMark:disabled {
+  cursor: not-allowed;
+}
+
+.compactLevelMarkActive {
+  border-color: var(--dsw-alias-border-l2);
+  background-color: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.compactLevelMarkName {
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.compactLevelMarkRatio {
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 优缺点说明卡：跟着当前档位切换 */
+.compactLevelDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background-color: var(--dsw-alias-bg-layer-2);
+}
+
+.compactLevelHeadline {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.compactLevelPro,
+.compactLevelCon {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.compactLevelProMark,
+.compactLevelConMark {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.compactLevelProMark {
+  color: var(--dsw-alias-state-success-primary, #2ea043);
+}
+
+.compactLevelConMark {
+  color: var(--dsw-alias-state-warning-primary, #e8a317);
+}
+
+.compactLevelFootnote {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}

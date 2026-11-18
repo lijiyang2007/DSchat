@@ -35,6 +35,7 @@ import {
   formatCompactionContext,
   planCompaction,
   planManualCompaction,
+  compactLevelMeta,
   SUMMARY_MAX_CHARS,
   SUMMARY_SYSTEM_PROMPT,
 } from './compaction.js'
@@ -1433,6 +1434,7 @@ const maybeCompactContext = async (
       // 单轮压缩可能不够（保留的最近几轮本身就很长），最多再补压 2 次。
       for (let pass = 0; pass < 3; pass += 1) {
         const session = getSession(sessionId)
+        const levelMeta = compactLevelMeta(settings.compactLevel)
         const plan = session
           ? planCompaction({
               history,
@@ -1440,6 +1442,8 @@ const maybeCompactContext = async (
               model,
               allowRefused: settings.allowRefusedContext,
               contextWindow: settings.contextWindow,
+              triggerRatio: levelMeta.ratio,
+              keepRounds: levelMeta.keepRounds,
             })
           : null
         if (!plan) {

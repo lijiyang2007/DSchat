@@ -44,14 +44,60 @@ const CONTEXT_WINDOWS: Record<string, number> = {
 const DEFAULT_CONTEXT_WINDOW = 64_000
 /** 中英混排下 1 token ≈ 2.2 个字符 */
 const CHARS_PER_TOKEN = 2.2
-/** 触发压缩的占比 */
+/** 默认触发压缩的占比（用户没选档位时用它） */
 const COMPACT_TRIGGER_RATIO = 0.8
 /** 压缩后至少保留最近几轮原文，保证衔接自然 */
 const MIN_KEEP_ROUNDS = 2
-/** 压缩后目标占用量，压到 50% 左右，避免立刻再次触发 */
+/**
+ * 压缩后目标占用量相对「触发点」的比例（v2.8.9 起按档位动态计算）。
+ * 触发点越低，压得越狠，否则很快又触发一次；触发点高时留得宽松些。
+ */
 const COMPACT_TARGET_RATIO = 0.5
 /** 摘要自身的长度上限 */
 export const SUMMARY_MAX_CHARS = 3000
+
+/**
+ * 上下文压缩档位（v2.8.9）：用户用滑块自己选「占到多少就开始压」。
+ *
+ * 四档对应 20% / 40% / 60% / 80%。低档位 = 更早压缩 = 每次请求的历史更短 = 更省钱，
+ * 但模型能「记住」的最近原文更少；高档位反之。
+ */
+export type CompactLevel = 'frugal' | 'economy' | 'balanced' | 'marathon'
+
+export type CompactLevelMeta = {
+  level: CompactLevel
+  /** 触发压缩的上下文占比 */
+  ratio: number
+  /** 压缩后保留原文的轮数 */
+  keepRounds: number
+}
+
+/**
+ * 四档定义。`ratio` 是触发点，`keepRounds` 是压缩后保留的最近轮数。
+ * 省档压得早、留得少；长记忆档压得晚、留得多。
+ */
+export const COMPACT_LEVELS: readonly CompactLevelMeta[] = [
+  { level: 'frugal', ratio: 0.2, keepRounds: 2 },
+  { level: 'economy', ratio: 0.4, keepRounds: 3 },
+  { level: 'balanced', ratio: 0.6, keepRounds: 4 },
+  { level: 'marathon', ratio: 0.8, keepRounds: 6 },
+] as const
+
+export const DEFAULT_COMPACT_LEVEL: CompactLevel = 'economy'
+
+/** 按档位名取定义；未知值退回默认档 */
+export const compactLevelMeta = (level: CompactLevel): CompactLevelMeta => {
+  const found = COMPACT_LEVELS.find((item) => item.level === level)
+  if (found) {
+    return found
+  }
+  const fallback = COMPACT_LEVELS.find((item) => item.level === DEFAULT_COMPACT_LEVEL)
+  return fallback ?? COMPACT_LEVELS[0]
+}
+
+/** 判断一个字符串是不是合法档位 */
+export const isCompactLevel = (value: unknown): value is CompactLevel =>
+  COMPACT_LEVELS.some((item) => item.level === value)
 /** 每轮提问/回答在摘要输入里的截断长度 */
 const SUMMARY_INPUT_CLIP = 900
 /** 摘要输入的总体积硬上限（字符）：导入的超长对话也不会把压缩请求自己撑爆 */
@@ -123,7 +169,10 @@ export type CompactionPlan = {
 
 /**
  * 判断是否需要压缩，并算出压缩边界。
- * `usedTokens` 传本轮请求扣除待发内容后的历史用量。
+ *
+ * v2.8.9 起触发点由档位决定：`triggerRatio` 是「占到窗口多少就压」，
+ * `keepRounds` 是压缩后至少保留的最近原文轮数（档位越高留得越多）。
+ * 不传时退回旧的 80% / MIN_KEEP_ROUNDS 行为，保持向后兼容。
  */
 export const planCompaction = ({
   history,
@@ -131,6 +180,8 @@ export const planCompaction = ({
   model,
   allowRefused,
   contextWindow,
+  triggerRatio,
+  keepRounds,
 }: {
   history: Message[]
   compaction: Compaction | undefined
@@ -138,9 +189,14 @@ export const planCompaction = ({
   allowRefused: boolean
   /** 用户配置的上下文窗口；缺省时按模型名推断 */
   contextWindow?: number
+  /** 触发压缩的占比（0~1），由用户档位决定；缺省 80% */
+  triggerRatio?: number
+  /** 压缩后至少保留的最近轮数；缺省 MIN_KEEP_ROUNDS */
+  keepRounds?: number
 }): CompactionPlan | null => {
   const window = getContextWindow(model, contextWindow)
-  const trigger = window * COMPACT_TRIGGER_RATIO
+  const ratio = triggerRatio && triggerRatio > 0 ? Math.min(0.95, triggerRatio) : COMPACT_TRIGGER_RATIO
+  const trigger = window * ratio
   const used = estimateHistoryTokens(history, compaction, allowRefused)
   if (used < trigger) {
     return null
@@ -158,15 +214,18 @@ export const planCompaction = ({
   if (pending.length < MIN_ROUNDS_TO_COMPACT) {
     return null
   }
-  // 从尾部往前保留，直到估算用量回落到目标线以下
-  const target = window * COMPACT_TARGET_RATIO
+  // 从尾部往前保留，直到估算用量回落到目标线以下。
+  // 目标线跟着触发点走：压得早（20%）就压到更低，避免刚压完又触发；
+  // 压得晚（80%）留得宽松些，别把刚聊过的内容也吞掉。
+  const target = window * ratio * COMPACT_TARGET_RATIO
+  const keep = Math.max(MIN_KEEP_ROUNDS, keepRounds ?? MIN_KEEP_ROUNDS)
   const kept: [UserMessage, AssistantMessage][] = []
   let keptTokens = 0
   let splitAt = pending.length
   for (let i = pending.length - 1; i >= 0; i--) {
     const [user, reply] = pending[i]
     const pairTokens = messageTokens(user) + messageTokens(reply)
-    if (kept.length >= MIN_KEEP_ROUNDS && keptTokens + pairTokens > target) {
+    if (kept.length >= keep && keptTokens + pairTokens > target) {
       splitAt = i + 1
       break
     }

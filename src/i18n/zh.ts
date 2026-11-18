@@ -39,6 +39,34 @@ export const zh = {
   settingsContextUsageEmpty: '当前对话为空',
   settingsContextUsageTokens: '{used} / {total} tokens',
   settingsContextUsageEstimated: '暂无服务端用量记录，这里是按字数估算的值',
+  settingsCompactLevelTitle: '压缩时机',
+  settingsCompactLevelFrugal: '极省',
+  settingsCompactLevelEconomy: '经济',
+  settingsCompactLevelBalanced: '较长记忆',
+  settingsCompactLevelMarathon: '超长记忆',
+  settingsCompactLevelFrugalHeadline: '占到 20% 就开始压缩——最省钱，但记性最短',
+  settingsCompactLevelEconomyHeadline: '占到 40% 开始压缩——省钱和记性的平衡点',
+  settingsCompactLevelBalancedHeadline: '占到 60% 开始压缩——记得更多，也更贵一点',
+  settingsCompactLevelMarathonHeadline: '占到 80% 才开始压缩——几乎不压，最接近「什么都记得」',
+  settingsCompactLevelFrugalPro:
+    '每次请求带的历史最短，输入 token 最省，长对话也不容易撞上限；适合查资料、一问一答这类不需要上下文的场景。',
+  settingsCompactLevelFrugalCon:
+    '模型只记得最近 2 轮原文，更早的内容全靠摘要；追问前面聊过的细节时容易答偏，摘要也可能丢掉你要的信息。',
+  settingsCompactLevelEconomyPro:
+    '兼顾花费和记忆：较早的轮次压成摘要，最近 3 轮保持原文，大多数日常对话够用，也不容易撞上限。',
+  settingsCompactLevelEconomyCon:
+    '聊到 40% 就会压一次，很长的对话里会有几段被摘要代替；特别依赖早期细节的任务（写代码、长文档）建议往上调一档。',
+  settingsCompactLevelBalancedPro:
+    '保留最近 4 轮原文，压得更少；写代码、改长文档这类需要记住前面内容的活儿更稳。',
+  settingsCompactLevelBalancedCon:
+    '每次请求带的历史更多，输入 token 花得更多；很长的对话更容易碰到上下文上限。',
+  settingsCompactLevelMarathonPro:
+    '保留最近 6 轮原文、到 80% 才压缩，最接近「全都记得」；需要长时间连贯推理时最合适。',
+  settingsCompactLevelMarathonCon:
+    '最费钱：几乎每轮都在发送很长的历史，输入 token 明显更高；对话极长时仍会被压缩。',
+  settingsCompactLevelFootnote:
+    '当前档位：占到 {percent}% 触发压缩，压缩后保留最近 {keep} 轮原文。本地记录始终完整，不会删除任何消息。',
+  settingsCompactLevelThreshold: '当前档位的压缩触发点：{percent}%',
   settingsAppearanceThemeLabel: '主题',
   settingsFontSizeLabel: '字体大小',
   settingsFontSizePreview: '预览文字大小',
@@ -345,10 +373,10 @@ export const zh = {
   modelSettingsSectionProtocol: '协议与工具开关',
   modelSettingsAutoCompactLabel: '上下文自动压缩',
   modelSettingsAutoCompactDesc:
-    '对话接近模型上下文窗口（约 80%）时，自动把较早轮次总结成摘要，让长对话可以一直继续；本地记录完整保留，可向上翻阅',
+    '对话占到上下文窗口 {percent}%（当前「{level}」档）时，自动把较早轮次总结成摘要，让长对话可以一直继续；本地记录完整保留，可向上翻阅',
   contextUsageLabel: '上下文 {percent}%',
   contextUsageHint: '当前对话占用上下文 {percent}%；{compacted}',
-  contextUsageAuto: '到 80% 会自动压缩较早内容',
+  contextUsageAuto: '到 {percent}% 会自动压缩较早内容',
   contextUsageManual: '未开启自动压缩，接近上限可能报错',
   contextCompactedToast: '上下文已自动压缩，较早内容已总结为摘要',
   contextCompactManualDone: '已压缩 {count} 轮较早对话，只保留最近几轮原文',

@@ -27,6 +27,11 @@ import {
 import { signOut, startSignIn, useAccount } from '../../services/account.js'
 import { formatBalance, refreshBalance, useBalance } from '../../services/balance.js'
 import { useChatStore } from '../../services/chat/store.js'
+import {
+  COMPACT_LEVELS,
+  DEFAULT_COMPACT_LEVEL,
+  type CompactLevel,
+} from '../../services/chat/compaction.js'
 import { saveBlob } from '../../services/saveFile.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -35,6 +40,7 @@ import {
   setAutoCheckUpdate,
   setAutoCollapseThinking,
   setAutoCompactContext,
+  setCompactLevel,
   setFontScale,
   setShowTokenUsage,
   setDailyTokenLimit,
@@ -403,24 +409,123 @@ const FONT_SIZE_LABELS = [
 ] as const
 
 /**
+ * 上下文压缩四档（v2.8.9）：名称、一句话卖点、优点、缺点。
+ * 与 compaction.ts 的 COMPACT_LEVELS 一一对应（顺序必须一致）。
+ */
+const COMPACT_LEVEL_LABELS: Record<CompactLevel, TranslationKey> = {
+  frugal: 'settingsCompactLevelFrugal',
+  economy: 'settingsCompactLevelEconomy',
+  balanced: 'settingsCompactLevelBalanced',
+  marathon: 'settingsCompactLevelMarathon',
+}
+
+const COMPACT_LEVEL_HEADLINES: Record<CompactLevel, TranslationKey> = {
+  frugal: 'settingsCompactLevelFrugalHeadline',
+  economy: 'settingsCompactLevelEconomyHeadline',
+  balanced: 'settingsCompactLevelBalancedHeadline',
+  marathon: 'settingsCompactLevelMarathonHeadline',
+}
+
+const COMPACT_LEVEL_PRO: Record<CompactLevel, TranslationKey> = {
+  frugal: 'settingsCompactLevelFrugalPro',
+  economy: 'settingsCompactLevelEconomyPro',
+  balanced: 'settingsCompactLevelBalancedPro',
+  marathon: 'settingsCompactLevelMarathonPro',
+}
+
+const COMPACT_LEVEL_CON: Record<CompactLevel, TranslationKey> = {
+  frugal: 'settingsCompactLevelFrugalCon',
+  economy: 'settingsCompactLevelEconomyCon',
+  balanced: 'settingsCompactLevelBalancedCon',
+  marathon: 'settingsCompactLevelMarathonCon',
+}
+
+/**
  * 瀵硅瘽璁剧疆锛氫笂涓嬫枃鐢ㄩ噺 + 鑷姩鍘嬬缉 + 姣忚疆 token 鐢ㄩ噺寮€鍏炽€?
  * 瀵硅瘽閲屼笉鍐嶆樉绀鸿繘搴︽潯锛岄伩鍏嶇敤鎴风洴鐫€鐧惧垎姣斾骇鐢熺劍铏戯紱鎯充簡瑙ｆ椂鐪嬩竴鐪煎嵆鍙€?
  */
 const ChatSettings = () => {
   const t = useTranslate()
   const autoCompact = useSettings((state) => state.autoCompactContext)
+  const compactLevel = useSettings((state) => state.compactLevel)
   const showTokenUsage = useSettings((state) => state.showTokenUsage)
-
+  const levelIndex = Math.max(
+    0,
+    COMPACT_LEVELS.findIndex((item) => item.level === compactLevel)
+  )
+  const levelMeta = COMPACT_LEVELS[levelIndex] ?? COMPACT_LEVELS[0]
   return (
     <>
       <SettingsGroup label={t('settingsContextUsageTitle')}>
         <ContextUsage actions />
       </SettingsGroup>
 
+      <SettingsGroup label={t('settingsCompactLevelTitle')}>
+        <div className={styles.compactLevelCell}>
+          <input
+            className={styles.compactLevelSlider}
+            type="range"
+            min={0}
+            max={COMPACT_LEVELS.length - 1}
+            step={1}
+            value={levelIndex}
+            aria-label={t('settingsCompactLevelTitle')}
+            disabled={!autoCompact}
+            onChange={(event) =>
+              setCompactLevel(COMPACT_LEVELS[Number(event.target.value)]?.level ?? DEFAULT_COMPACT_LEVEL)
+            }
+          />
+          <div className={styles.compactLevelMarks}>
+            {COMPACT_LEVELS.map((item, index) => (
+              <button
+                key={item.level}
+                type="button"
+                className={clsx(
+                  styles.compactLevelMark,
+                  index === levelIndex && styles.compactLevelMarkActive
+                )}
+                disabled={!autoCompact}
+                onClick={() => setCompactLevel(item.level)}
+              >
+                <span className={styles.compactLevelMarkName}>
+                  {t(COMPACT_LEVEL_LABELS[item.level])}
+                </span>
+                <span className={styles.compactLevelMarkRatio}>
+                  {Math.round(item.ratio * 100)}%
+                </span>
+              </button>
+            ))}
+          </div>
+          {/* 优缺点说明：跟着当前档位切换，让用户知道自己在换什么 */}
+          <div className={styles.compactLevelDetail}>
+            <div className={styles.compactLevelHeadline}>
+              {t(COMPACT_LEVEL_HEADLINES[levelMeta.level])}
+            </div>
+            <div className={styles.compactLevelPro}>
+              <span className={styles.compactLevelProMark}>＋</span>
+              {t(COMPACT_LEVEL_PRO[levelMeta.level])}
+            </div>
+            <div className={styles.compactLevelCon}>
+              <span className={styles.compactLevelConMark}>−</span>
+              {t(COMPACT_LEVEL_CON[levelMeta.level])}
+            </div>
+            <div className={styles.compactLevelFootnote}>
+              {t('settingsCompactLevelFootnote', {
+                percent: Math.round(levelMeta.ratio * 100),
+                keep: levelMeta.keepRounds,
+              })}
+            </div>
+          </div>
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup label={t('settingsPersonalizeLabel')}>
         <SettingCell
           label={t('modelSettingsAutoCompactLabel')}
-          description={t('modelSettingsAutoCompactDesc')}
+          description={t('modelSettingsAutoCompactDesc', {
+            percent: Math.round(levelMeta.ratio * 100),
+            level: t(COMPACT_LEVEL_LABELS[levelMeta.level]),
+          })}
           status={null}
           action={
             <button

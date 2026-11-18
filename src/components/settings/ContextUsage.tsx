@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getVisibleMessages } from '../../services/chat/branches.js'
 import {
+  compactLevelMeta,
   contextUsageDetail,
   manualCompactionStats,
 } from '../../services/chat/compaction.js'
@@ -53,6 +54,9 @@ export const ContextUsage = ({
   const contextWindow = useSettings((state) => state.contextWindow)
   const autoCompact = useSettings((state) => state.autoCompactContext)
   const allowRefused = useSettings((state) => state.allowRefusedContext)
+  const compactLevel = useSettings((state) => state.compactLevel)
+  // 档位决定触发点与保留轮数，进度条的阈值刻度也跟着走
+  const levelMeta = compactLevelMeta(compactLevel)
   // 压缩中：自动压缩与主动压缩共用这个状态，避免重复触发
   const compacting = useChatStore((state) =>
     targetId !== null && targetId !== undefined ? Boolean(state.compacting[targetId]) : false
@@ -69,11 +73,17 @@ export const ContextUsage = ({
     }
     const detail = contextUsageDetail(history, session.compaction, model, 0, contextWindow)
     const percent = Math.round(detail.ratio * 100)
-    const level = detail.ratio >= 0.8 ? 'high' : detail.ratio >= 0.5 ? 'medium' : 'low'
+    // 超过当前档位的触发点就算「高」，让颜色和实际压缩时机一致
+    const level =
+      detail.ratio >= levelMeta.ratio
+        ? 'high'
+        : detail.ratio >= levelMeta.ratio * 0.6
+          ? 'medium'
+          : 'low'
     return { percent, level, tokens: detail.tokens, estimated: detail.estimated }
   })()
 
-  // 可压缩轮次：保留最近 3 轮原文，其余可以压成摘要
+  // 可压缩轮次：保留轮数跟随当前档位（省档留得少、长记忆档留得多）
   const stats = (() => {
     if (!session || !actions) {
       return null
@@ -83,7 +93,7 @@ export const ContextUsage = ({
       history,
       compaction: session.compaction,
       allowRefused,
-      keepRounds: 3,
+      keepRounds: levelMeta.keepRounds,
     })
   })()
 
@@ -97,7 +107,7 @@ export const ContextUsage = ({
     }
     setBusy(true)
     try {
-      const count = await compactSession(targetId, 3)
+      const count = await compactSession(targetId, levelMeta.keepRounds)
       showToast({ key: 'contextCompactManualDone', params: { count } })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -143,7 +153,16 @@ export const ContextUsage = ({
               className={clsx(styles.fill, styles[`fill_${usage.level}`])}
               style={{ width: `${Math.min(100, usage.percent)}%` }}
             />
-            {autoCompact ? <div className={styles.threshold} /> : null}
+            {/* 阈值刻度跟着档位走：20/40/60/80% */}
+            {autoCompact ? (
+              <div
+                className={styles.threshold}
+                style={{ left: `${Math.round(levelMeta.ratio * 100)}%` }}
+                title={t('settingsCompactLevelThreshold', {
+                  percent: Math.round(levelMeta.ratio * 100),
+                })}
+              />
+            ) : null}
           </div>
           <div className={styles.hint}>
             {usage.estimated ? t('settingsContextUsageEstimated') : t('settingsContextUsageHint')}

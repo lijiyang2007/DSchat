@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { setRuntimeApiOrigin } from './api/origin.js'
 import type { TtsVoice } from './api/speech.js'
+import {
+  DEFAULT_COMPACT_LEVEL,
+  isCompactLevel,
+  type CompactLevel,
+} from './chat/compaction.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 import {
   createOfficialProvider,
@@ -88,6 +93,11 @@ export type Settings = {
   systemPrompt: string
   /** 上下文接近模型窗口 80% 时自动把早期轮次压成摘要 */
   autoCompactContext: boolean
+  /**
+   * 压缩档位（v2.8.9）：占到窗口 20/40/60/80% 时触发压缩，
+   * 并决定压缩后保留几轮原文。见 compaction.ts 的 COMPACT_LEVELS。
+   */
+  compactLevel: CompactLevel
   temperature: number | null
   topP: number | null
   maxTokens: number | null
@@ -148,6 +158,7 @@ const KEYS = {
   model: 'chat-demo:model',
   systemPrompt: 'chat-demo:system-prompt',
   autoCompactContext: 'chat-demo:auto-compact-context',
+  compactLevel: 'chat-demo:compact-level',
   temperature: 'chat-demo:temperature',
   topP: 'chat-demo:top-p',
   maxTokens: 'chat-demo:max-tokens',
@@ -462,6 +473,10 @@ export const useSettings = create<Settings>(() => ({
   model: read(KEYS.model) ?? DEFAULT_MODEL,
   systemPrompt: read(KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
   autoCompactContext: readBool(KEYS.autoCompactContext, true),
+  compactLevel: (() => {
+    const saved = read(KEYS.compactLevel)
+    return isCompactLevel(saved) ? saved : DEFAULT_COMPACT_LEVEL
+  })(),
   temperature: readNumber(KEYS.temperature),
   topP: readNumber(KEYS.topP),
   maxTokens: readNumber(KEYS.maxTokens),
@@ -653,6 +668,13 @@ export const setContextWindow = (value: number) => {
   useSettings.setState({ contextWindow })
 }
 
+/** 上下文压缩档位（v2.8.9）：决定占到多少开始压、压完保留几轮原文 */
+export const setCompactLevel = (compactLevel: CompactLevel) => {
+  const next = isCompactLevel(compactLevel) ? compactLevel : DEFAULT_COMPACT_LEVEL
+  write(KEYS.compactLevel, next)
+  useSettings.setState({ compactLevel: next })
+}
+
 export const setVisionSupport = (visionSupport: VisionSupport) => {
   write(KEYS.visionSupport, visionSupport)
   useSettings.setState({ visionSupport })
@@ -825,6 +847,7 @@ export const resetModelAndPolicySettings = () => {
   setModel(DEFAULT_MODEL)
   setSystemPrompt(DEFAULT_SYSTEM_PROMPT)
   setAutoCompactContext(true)
+  setCompactLevel(DEFAULT_COMPACT_LEVEL)
   setThinkingEffort('off')
   setContextWindow(1000000)
   setVisionSupport('auto')
