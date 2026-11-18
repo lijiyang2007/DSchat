@@ -251,7 +251,11 @@ export const en = {
   thinkingEffortMaxShort: 'Max',
   thinkingEffortTooltip: 'Click to change thinking effort (current: {level})',
   thinkingProQuotaHint: 'Switched to the Pro model; it uses your quota faster',
-  visionFlashFallback: 'Images/files need the Flash model, switched automatically',
+  thinkingSwitchedFlash: 'Switched to the Flash model',
+  thinkingOnlyOfficial:
+    'This button works only with a signed-in DeepSeek account; set thinking effort in Settings',
+  thinkingTooltipPro: 'Current model: {model} · tap to switch (Pro uses quota faster)',
+  visionProNoImage: 'The Pro model cannot read images/files. Tap "Thinking" above to switch to Flash first',
   thinkingOnToast: 'Thinking enabled',
   thinkingOffToast: 'Thinking disabled',
   searchOnToast: 'Web search enabled',

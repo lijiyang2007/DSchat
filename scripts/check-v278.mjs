@@ -22,13 +22,17 @@ const updater = read('src/services/updater.ts')
 const zh = read('src/i18n/zh.ts')
 const en = read('src/i18n/en.ts')
 
-console.log('\n一、深度思考 → 官方账号自动切 Pro')
+console.log('\n一、深度思考按钮只切 Pro/Flash，不碰思考强度（v2.8.3）')
 check('导入 accountToken', /accountToken/.test(chatInput))
 check('导入 setModel / activeProvider', /setModel/.test(chatInput) && /activeProvider/.test(chatInput))
-check('点击处理切 pro 模型', /deepseek-v4-pro/.test(chatInput) && /setModel\(pro\.id\)/.test(chatInput))
-check('仅官方账号触发', /isOfficial && accountToken\(\)/.test(chatInput))
-check('弹额度提示', /thinkingProQuotaHint/.test(chatInput))
-check('按钮 onClick 已换成新处理', /onClick=\{onThinkingClick\}/.test(chatInput))
+check('按钮 onClick 用 onThinkingClick', /onClick=\{onThinkingClick\}/.test(chatInput))
+check('Pro 与 Flash 双向切换', /setModel\(pro\.id\)/.test(chatInput) && /setModel\(flash\.id\)/.test(chatInput))
+check('仅官方账号可用', /!isOfficial \|\| !accountToken\(\)/.test(chatInput))
+check(
+  '绝不调用 setThinkingEffort（不改思考强度）',
+  !/setThinkingEffort/.test(chatInput)
+)
+check('基于 model 判断 usingPro', /usingPro = \/pro\/i\.test\(model\)/.test(chatInput))
 check('双语提示文案齐备', /thinkingProQuotaHint/.test(zh) && /thinkingProQuotaHint/.test(en))
 
 console.log('\n一之二、按钮文字标签始终显示（不折叠成纯图标）')

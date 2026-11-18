@@ -322,14 +322,20 @@
   margin-left: auto;
 }
 
-/* 语音按钮放到发送按钮正上方，竖排；横向不再占用空间，避免挤掉思考/搜索的文字 */
-.sendColumn {
+/* 发送按钮的定位参照：语音图标浮在它正上方，其余图标位置完全不动 */
+.sendAnchor {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
   flex-shrink: 0;
   margin-left: 8px;
+}
+
+/* 只把语音图标挪到发送箭头正上方；不占横向空间，不改其它图标位置 */
+.voiceFloat {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .sendButton {

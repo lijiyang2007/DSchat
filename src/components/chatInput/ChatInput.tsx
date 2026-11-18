@@ -22,9 +22,7 @@ import {
   matchesRefusalKeyword,
   setModel,
   setSearch,
-  setThinkingEffort,
   useSettings,
-  type ThinkingEffort,
 } from '../../services/settings.js'
 import { accountToken } from '../../services/account.js'
 import { useIsMobile } from '../../app/viewport.js'
@@ -67,55 +65,42 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
-  const thinkingEffort = useSettings((state) => state.thinkingEffort)
-  const thinking = thinkingEffort !== 'off'
-  // 点击循环切换：关闭 → 低 → 中 → 高 → 最高 → 关闭
-  const nextEffort = (): ThinkingEffort => {
-    const order: ThinkingEffort[] = ['off', 'low', 'high', 'max']
-    const index = order.indexOf(thinkingEffort)
-    return order[(index + 1) % order.length]
-  }
-  const effortLabel = (() => {
-    switch (thinkingEffort) {
-      case 'low':
-        return t('thinkingEffortLowShort')
-      case 'high':
-        return t('thinkingEffortHighShort')
-      case 'max':
-        return t('thinkingEffortMaxShort')
-      default:
-        return t('thinkingSwitch')
-    }
-  })()
+  // 按钮高亮 = 当前用的是 Pro 模型。思考强度（off/low/high/max）由设置页控制，
+  // 本按钮绝不修改强度——只负责在 Pro / Flash 之间切换。
+  const model = useSettings((state) => state.model)
+  const usingPro = /pro/i.test(model)
 
   /**
-   * 深度思考按钮点击（v2.7.8）。
-   * 官方账号 + 官方供应商的用户开启深度思考时，自动切到 pro 模型
-   * （flash 不支持高强度思考），并弹一句简短提示——pro 更快消耗额度。
-   * 其余情况照旧循环切换档位。
+   * 深度思考按钮点击（v2.8.3 起语义变更）：
+   * 官方账号 + 官方供应商 → 只在 Pro / Flash 之间切换模型，并提示额度消耗；
+   * 不做任何思考强度的改动。用户想调强度请去设置页。
+   * 其他供应商不接管，按钮退化为只读展示（不做无意义切换）。
    */
   const onThinkingClick = () => {
-    const next = nextEffort()
     const settings = useSettings.getState()
-    // 官方账号用户只要选择深度思考（非 off），就确保用 Pro 模型——flash 扛不住高强度思考
-    if (next !== 'off') {
-      const provider = activeProvider(settings)
-      const isOfficial = provider.id === 'deepseek-official' || provider.builtin === true
-      if (isOfficial && accountToken()) {
-        const pro = provider.models.find((m) => m.id === 'deepseek-v4-pro' || /pro/i.test(m.id))
-        if (pro && settings.model !== pro.id) {
-          setModel(pro.id)
-          setThinkingEffort(next)
-          // 额度提示优先，盖掉下面的普通开关反馈
-          showToast({ key: 'thinkingProQuotaHint' })
-          return
-        }
+    const provider = activeProvider(settings)
+    const isOfficial = provider.id === 'deepseek-official' || provider.builtin === true
+    if (!isOfficial || !accountToken()) {
+      showToast({ key: 'thinkingOnlyOfficial' })
+      return
+    }
+    const pro = provider.models.find((m) => m.id === 'deepseek-v4-pro' || /pro/i.test(m.id))
+    const flash = provider.models.find((m) => /flash/i.test(m.id))
+    if (usingPro) {
+      // 当前 Pro → 切回 Flash
+      if (flash) {
+        setModel(flash.id)
+        showToast({ key: 'thinkingSwitchedFlash' })
+      }
+    } else {
+      // 当前 Flash → 切到 Pro
+      if (pro) {
+        setModel(pro.id)
+        showToast({ key: 'thinkingProQuotaHint' })
       }
     }
-    setThinkingEffort(next)
-    // 每次点击都给明确反馈，避免真机上「按了没反应」的错觉
-    showToast({ key: next === 'off' ? 'thinkingOffToast' : 'thinkingOnToast' })
   }
+  const effortLabel = t('thinkingSwitch')
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -265,16 +250,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         <div className={styles.functionRow}>
           {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
           <div className={styles.toggles}>
-            <Tooltip content={t('thinkingEffortTooltip', { level: effortLabel })}>
+            <Tooltip content={t('thinkingTooltipPro', { model: usingPro ? 'Pro' : 'Flash' })}>
               <button
                 type="button"
-                className={clsx(
-                  styles.toggle,
-                  thinking && styles.selected,
-                  thinkingEffort === 'max' && styles.selectedStrong
-                )}
-                aria-label={t('thinkingEffortTooltip', { level: effortLabel })}
-                aria-pressed={thinking}
+                className={clsx(styles.toggle, usingPro && styles.selected)}
+                aria-label={t('thinkingTooltipPro', { model: usingPro ? 'Pro' : 'Flash' })}
+                aria-pressed={usingPro}
                 onClick={onThinkingClick}
               >
                 <IconThinkOutline14 />
@@ -298,45 +279,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             </Tooltip>
           </div>
           <div className={styles.right}>
-            {/* 语音按钮放到发送按钮正上方（竖排），不再占用横向空间挡住思考/搜索文字 */}
-            <div className={styles.sendColumn}>
-              <VoiceButton
-                status={voice.status}
-                disabled={!voice.available}
-                seconds={voice.seconds}
-                onClick={() => {
-                  if (
-                    voice.status !== 'idle' ||
-                    (!useChatStore.getState().importingHistory && ensureApiKey())
-                  ) {
-                    void voice.toggle()
-                  }
-                }}
-              />
-              {streaming && sessionId ? (
-                <button
-                  type="button"
-                  className={styles.sendButton}
-                  aria-label={t('chatInputStopButtonTooltip')}
-                  onClick={() => {
-                    stopReadAloud()
-                    stopReply(sessionId)
-                  }}
-                >
-                  <IconStopFill16 />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={clsx(styles.sendButton, !canSend && styles.disabled)}
-                  aria-label={t('send')}
-                  aria-disabled={!canSend}
-                  onClick={send}
-                >
-                  <IconSendOutline16 />
-                </button>
-              )}
-            </div>
             <Tooltip content={t('chatInputMoreActions')}>
               <button
                 type="button"
@@ -387,6 +329,47 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 setPlusOpen(false)
               }}
             />
+            {/* 发送按钮保持在原位；仅语音图标浮在它正上方，其它图标一律不动 */}
+            <div className={styles.sendAnchor}>
+              {streaming && sessionId ? (
+                <button
+                  type="button"
+                  className={styles.sendButton}
+                  aria-label={t('chatInputStopButtonTooltip')}
+                  onClick={() => {
+                    stopReadAloud()
+                    stopReply(sessionId)
+                  }}
+                >
+                  <IconStopFill16 />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={clsx(styles.sendButton, !canSend && styles.disabled)}
+                  aria-label={t('send')}
+                  aria-disabled={!canSend}
+                  onClick={send}
+                >
+                  <IconSendOutline16 />
+                </button>
+              )}
+              <div className={styles.voiceFloat}>
+                <VoiceButton
+                  status={voice.status}
+                  disabled={!voice.available}
+                  seconds={voice.seconds}
+                  onClick={() => {
+                    if (
+                      voice.status !== 'idle' ||
+                      (!useChatStore.getState().importingHistory && ensureApiKey())
+                    ) {
+                      void voice.toggle()
+                    }
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
