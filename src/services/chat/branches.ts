@@ -14,24 +14,41 @@ export const normalizeSession = (session: Session): Session =>
         })),
       }
 
-/** 展示内容与请求上下文共用当前选中的分支路径。 */
+/**
+ * 当前选中分支的可见消息。
+ *
+ * v2.9.1：加 WeakMap 缓存。以前每次调用都要把 `session.messages` 整个映射成 Map
+ * 再沿分支走一遍——长会话（导入的几千条）里每次渲染都做一次 O(n) 分配，
+ * 压缩刚结束时界面正在重排，这条路径直接把主线程拖住（表现为「压缩后短期很卡」）。
+ * 会话对象是不可变更新的（改动时一定是新对象），所以按 session 身份缓存是安全的。
+ */
+const visibleCache = new WeakMap<Session, Message[]>()
+
 export const getVisibleMessages = (session: Session): Message[] => {
-  if (session.rootMessageId === undefined) {
-    return session.messages
+  const cached = visibleCache.get(session)
+  if (cached) {
+    return cached
   }
-  const byId = new Map(session.messages.map((message) => [message.id, message]))
-  const path: Message[] = []
-  let id = session.rootMessageId
-  while (id) {
-    const message = byId.get(id)
-    if (!message) {
-      break
-    }
-    path.push(message)
-    byId.delete(id)
-    id = message.selectedChildId ?? null
-  }
-  return path
+  const result =
+    session.rootMessageId === undefined
+      ? session.messages
+      : (() => {
+          const byId = new Map(session.messages.map((message) => [message.id, message]))
+          const path: Message[] = []
+          let id = session.rootMessageId
+          while (id) {
+            const message = byId.get(id)
+            if (!message) {
+              break
+            }
+            path.push(message)
+            byId.delete(id)
+            id = message.selectedChildId ?? null
+          }
+          return path
+        })()
+  visibleCache.set(session, result)
+  return result
 }
 
 export type MessageVersions = { ids: string[]; index: number }

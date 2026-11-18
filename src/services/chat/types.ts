@@ -140,6 +140,11 @@ export type Session = {
    * 原始 updatedAt 保持不变；用户在该会话里继续聊之后，listTime 自然回到真实更新时间。
    */
   importedAt?: number
+  /**
+   * 导入来源 ID（v2.9.1）：导入时若本机已有同 ID 会话，会给这份换新 ID 另存，
+   * 用它记下它在导入包里的原始 ID，重复导入同一个包时据此去重（见 db.commitStaging）。
+   */
+  sourceId?: string
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */

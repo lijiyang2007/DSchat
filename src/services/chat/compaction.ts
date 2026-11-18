@@ -135,6 +135,26 @@ const messageTokens = (message: Message): number => {
 }
 
 /**
+ * 单条消息的 token 估算缓存（v2.9.1）。
+ *
+ * 上下文用量条、压缩计划、说明卡都会反复调用估算，而长会话动辄上千条消息；
+ * 压缩刚结束时界面要连续重算好几次，每次都把每条消息的正文重新 join + 数长度，
+ * 在低配机上就是肉眼可见的卡顿。消息是不可变更新的（流式增量会产生新对象），
+ * 所以按消息身份缓存是安全的。
+ */
+const tokenCache = new WeakMap<Message, number>()
+
+const messageTokensCached = (message: Message): number => {
+  const cached = tokenCache.get(message)
+  if (cached !== undefined) {
+    return cached
+  }
+  const tokens = messageTokens(message)
+  tokenCache.set(message, tokens)
+  return tokens
+}
+
+/**
  * 请求里历史部分的估算 token：未被摘要覆盖的轮次 + 摘要本身。
  * 已压缩的轮次不再发送，因此不计入，否则会一直判定超阈值、反复压缩。
  */
@@ -151,7 +171,7 @@ export const estimateHistoryTokens = (
     : 0
   let total = summaryTokens
   for (const [user, reply] of rounds.slice(Math.max(0, startIndex))) {
-    total += messageTokens(user) + messageTokens(reply)
+    total += messageTokensCached(user) + messageTokensCached(reply)
   }
   return total
 }
@@ -224,7 +244,7 @@ export const planCompaction = ({
   let splitAt = pending.length
   for (let i = pending.length - 1; i >= 0; i--) {
     const [user, reply] = pending[i]
-    const pairTokens = messageTokens(user) + messageTokens(reply)
+    const pairTokens = messageTokensCached(user) + messageTokensCached(reply)
     if (kept.length >= keep && keptTokens + pairTokens > target) {
       splitAt = i + 1
       break

@@ -49,10 +49,14 @@ check(
 
 console.log('\n三、开关条件')
 check('超过阈值才窗口化', /WINDOWING_THRESHOLD = 30/.test(ml))
+// v2.9.1：以前流式输出时整列渲染（`!streaming`），长对话一生成就把几千条消息全挂回 DOM，
+// 这是「压缩后接着发消息特别卡」的主因之一。现在流式期间照样窗口化，靠 pinTail 保住末尾。
 check(
-  '流式输出时整列渲染（末尾要实时刷新）',
-  /messages\.length > WINDOWING_THRESHOLD && !streaming/.test(ml)
+  '流式输出时也窗口化（v2.9.1 起不再整列渲染）',
+  !/WINDOWING_THRESHOLD && !streaming/.test(ml)
 )
+check('生成中把末尾消息钉在窗口里', /pinTail: streaming/.test(ml))
+check('pinTail 让窗口覆盖到列表末尾', /if \(pinTail\)[\s\S]{0,240}end = count/.test(hook))
 check('关闭窗口化时 start/end 覆盖全部消息', /if \(!enabled\)[\s\S]{0,160}end: count, padTop: 0, padBottom: 0/.test(hook))
 
 console.log('\n四、滚动稳定性（乱跳的根因）')
@@ -68,6 +72,8 @@ console.log('\n五、估算函数是纯函数且合理')
 check('用户消息按字数估算', /message\.role === 'user'[\s\S]{0,160}content\.length \/ 20/.test(hook))
 check('助手消息按正文字数估算', /chars \* 1\.05/.test(hook))
 check('估算值有下限保护', /Math\.max\(24, height\)/.test(hook))
+// v2.9.1：估算按消息对象缓存，生成中每帧重算整个数组的开销就此消失
+check('估算结果按消息对象缓存', /heightCache = new WeakMap<Message, number>\(\)/.test(hook))
 
 console.log('\n六、不破坏既有滚动行为')
 check('stickyRef 仍恒 false', /stickyRef = useRef\(false\)/.test(ml))

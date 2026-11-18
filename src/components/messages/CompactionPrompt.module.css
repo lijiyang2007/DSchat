@@ -1,0 +1,85 @@
+/* 压缩进行中的阻塞提示（v2.9.1） */
+.modal {
+  /* 比普通确认框略窄，且不提供关闭按钮，观感更像「正在处理」 */
+  width: 340px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.safe {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  background-color: var(--dsw-alias-bg-layer-3);
+}
+
+/* 三个点循环：不用 CSS 动画库，弱机上也只有 transform，开销极小 */
+.spinner {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 16px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-brand-primary);
+  opacity: 0.35;
+  animation: compactionDot 1.2s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes compactionDot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* 系统开启「减弱动态效果」时不做缩放，只保留呼吸感 */
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation-name: compactionDotFade;
+  }
+
+  @keyframes compactionDotFade {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+}

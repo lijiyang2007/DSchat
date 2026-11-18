@@ -20,6 +20,8 @@ const OVERSCAN_SCREENS = 1.25
 const FALLBACK_VIEWPORT = 720
 /** 单条消息的估算上限，避免超长回答把估算值拉爆 */
 const MAX_ESTIMATE = 12000
+/** 生成中始终保留的末尾消息条数（最后一条在长高，多留几条避免边界抖动） */
+const TAIL_KEEP_MESSAGES = 6
 
 export type MessageWindow = {
   /** 第一个挂载的消息下标（含） */
@@ -37,8 +39,24 @@ export type MessageWindow = {
 /**
  * 估算单条消息的高度（像素），只用于还没被真正渲染测量过的消息占位。
  * 目标不是精确，而是让滚动条长度和上下占位块接近真实，开长会话时不会一缩一胀。
+ *
+ * v2.9.1：加 WeakMap 缓存。流式生成时每来一批增量都会重算整个估算数组，
+ * 长会话（上千条消息）里这段遍历会跟着每帧跑一次，是生成期卡顿的固定开销。
+ * 消息是不可变更新的（增量会产生新对象），按消息身份缓存安全。
  */
+const heightCache = new WeakMap<Message, number>()
+
 export const estimateMessageHeight = (message: Message): number => {
+  const cached = heightCache.get(message)
+  if (cached !== undefined) {
+    return cached
+  }
+  const height = measureEstimate(message)
+  heightCache.set(message, height)
+  return height
+}
+
+const measureEstimate = (message: Message): number => {
   if (message.role === 'user') {
     const lines = Math.max(1, Math.ceil(message.content.length / 20))
     return 56 + lines * 24 + message.files.length * 132
@@ -79,6 +97,7 @@ export const useMessageWindowing = ({
   estimates,
   enabled,
   layoutKey,
+  pinTail = false,
 }: {
   /** 实际滚动容器（桌面是 .container，移动端是 .scroll） */
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -92,6 +111,8 @@ export const useMessageWindowing = ({
   enabled: boolean
   /** 滚动容器换绑或切会话的时机 */
   layoutKey: unknown
+  /** 生成中：末尾几条必须始终挂载（最后一条每秒都在长高） */
+  pinTail?: boolean
 }): MessageWindow => {
   /** 实测高度缓存，按消息 id 存；消息 id 全局唯一，可跨会话复用 */
   const heightsRef = useRef(new Map<string, number>())
@@ -140,11 +161,18 @@ export const useMessageWindowing = ({
     const height = viewport.height || FALLBACK_VIEWPORT
     const top = Math.max(0, viewport.top - leadHeight)
     const overscan = height * OVERSCAN_SCREENS
-    const start = Math.min(count - 1, findIndex(offsets, top - overscan))
-    const end = Math.min(count, Math.max(start + 1, findIndex(offsets, top + height + overscan) + 1))
+    let start = Math.min(count - 1, findIndex(offsets, top - overscan))
+    let end = Math.min(count, Math.max(start + 1, findIndex(offsets, top + height + overscan) + 1))
+    // v2.9.1：生成中最后一条消息必须始终挂载——它每秒都在长高，
+    // 用户就算上翻看历史，回来时也得看到最新内容，不能因为滚出了窗口就消失。
+    if (pinTail) {
+      end = count
+      // 同时把窗口往上扩一点，避免「末尾单独一条挂在下面」时上方内容被卸掉又装回
+      start = Math.min(start, Math.max(0, count - 1 - TAIL_KEEP_MESSAGES))
+    }
     firstVisibleRef.current = Math.min(count - 1, findIndex(offsets, top))
     return { start, end, padTop: offsets[start], padBottom: Math.max(0, total - offsets[end]) }
-  }, [ids.length, offsets, total, viewport, leadHeight, enabled])
+  }, [ids.length, offsets, total, viewport, leadHeight, enabled, pinTail])
 
   /**
    * 落到底部。

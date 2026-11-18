@@ -81,8 +81,12 @@ export const MessageList = ({
   }, [])
 
   // 长会话窗口化：只挂载视口附近的消息，其余用等高占位块撑住滚动条。
-  // 消息少（或正在流式输出末尾）时整列照常渲染，行为与以前完全一致。
-  const windowed = messages.length > WINDOWING_THRESHOLD && !streaming
+  //
+  // v2.9.1 修：以前流式输出期间会整列渲染（`!streaming`），理由是「末尾要实时刷新」。
+  // 但实测这恰恰是长对话最卡的场景——一压缩完就要接着发消息，生成期间几千条消息
+  // 全部挂回 DOM，低配机直接卡到掉帧甚至被系统回收。现在流式期间照样窗口化：
+  // 生成中的那条消息一定在列表末尾，只要保证窗口包含末尾即可（见 window 计算的 tail 参数）。
+  const windowed = messages.length > WINDOWING_THRESHOLD
   const ids = useMemo(() => messages.map((message) => message.id), [messages])
   const estimates = useMemo(
     () => (windowed ? messages.map(estimateMessageHeight) : EMPTY_ESTIMATES),
@@ -97,6 +101,7 @@ export const MessageList = ({
       estimates,
       enabled: windowed,
       layoutKey: `${session.id}:${isMobile}`,
+      pinTail: streaming,
     })
 
   // 按钮专用：绕过 stickyRef 守卫（恒 false，供「生成时不自动滚动」使用），

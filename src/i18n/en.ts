@@ -409,6 +409,13 @@ export const en = {
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: 'Show summary',
   contextCompactedHide: 'Hide summary',
+  compactionPromptTitleAuto: 'Compacting context',
+  compactionPromptTitleManual: 'Compacting context',
+  compactionPromptKeepOpen: 'Compacting — please do not close the app or leave this chat.',
+  compactionPromptLagHint:
+    'The UI may feel sluggish during and right after compaction. That is expected and clears up within a few seconds.',
+  compactionPromptSafeHint:
+    'Compaction only changes what is sent to the model next. Your local history is never deleted and stays scrollable.',
   backToLatest: 'Back to latest',
   modelSettingsSectionReply: 'Reply & Refusal Behavior',
   modelSettingsSectionRefusal: 'Keyword Refusal Rules',

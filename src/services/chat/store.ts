@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { translate } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { showToast } from '../../components/base/toastState.js'
+import {
+  beginCompactionPrompt,
+  endCompactionPrompt,
+} from '../../components/messages/compactionPromptState.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import {
   blobToDataUrl,
@@ -1430,6 +1434,9 @@ const maybeCompactContext = async (
   const settings = useSettings.getState()
   const task = (async () => {
     set((state) => ({ compacting: { ...state.compacting, [sessionId]: true } }))
+    // 压缩期间给用户一个明确的阻塞提示（v2.9.1）：自动压缩发生在发送链路里，
+    // 用户可能已经离开设置页，必须有弹窗说明「别关、卡顿正常」
+    beginCompactionPrompt('auto')
     try {
       // 单轮压缩可能不够（保留的最近几轮本身就很长），最多再补压 2 次。
       for (let pass = 0; pass < 3; pass += 1) {
@@ -1478,6 +1485,7 @@ const maybeCompactContext = async (
           Object.entries(state.compacting).filter(([id]) => id !== sessionId)
         ),
       }))
+      endCompactionPrompt()
     }
   })()
   compactLocks.set(sessionId, task)
@@ -1523,6 +1531,9 @@ export const compactSession = async (sessionId: string, keepRounds = 3): Promise
   const controller = new AbortController()
   const task = (async () => {
     set((state) => ({ compacting: { ...state.compacting, [sessionId]: true } }))
+    // 手动压缩同样弹阻塞提示：用户点了按钮后要看到「正在压缩、别关」，
+    // 否则长对话压缩要等十几秒，看起来像没反应
+    beginCompactionPrompt('manual')
     try {
       const summary = await summarizeRounds({
         covered: plan.covered,
@@ -1549,6 +1560,7 @@ export const compactSession = async (sessionId: string, keepRounds = 3): Promise
           Object.entries(state.compacting).filter(([id]) => id !== sessionId)
         ),
       }))
+      endCompactionPrompt()
     }
   })()
   // 锁只用于串行化，不向外传结果（类型是 Promise<void>）

@@ -74,8 +74,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const waiting =
     streaming && view.steps.length === 0 && !view.answer && !message.thinking
   // 发送前正在压缩长历史（导入的长对话首次发送时）：等待点旁边给出明确提示，避免像卡死
-  const compacting = useChatStore((state) => Boolean(state.compacting[sessionId]))
-  // v2.7.7 起恢复真流式：正文随 SSE 增量直接上屏，不再走打字机伪装。
+  const compacting = useChatStore((state) => Boolean(state.compacting[sessionId]))  // v2.7.7 起恢复真流式：正文随 SSE 增量直接上屏，不再走打字机伪装。
   // 渲染节流由 Markdown 层的 useThrottleMarkdownRender 按渲染耗时代理（官方 chat-demo 同款）。
   const revealed = answer?.markdown ?? ''
   const summaryEntry = `${message.id}-summary`

@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getVisibleMessages } from '../../services/chat/branches.js'
 import {
@@ -63,7 +63,10 @@ export const ContextUsage = ({
   )
   const [busy, setBusy] = useState(false)
 
-  const usage = (() => {
+  // v2.9.1：这里以前是每次渲染都直接算（IIFE），而设置页在压缩期间会因为
+  // compacting 状态反复重渲染，长会话下每次都要把整段历史重新估一遍 token，
+  // 压缩时/压缩后那几秒的卡顿有一大半来自这里。改成 useMemo 只跟真正影响结果的值联动。
+  const usage = useMemo(() => {
     if (!session) {
       return null
     }
@@ -81,10 +84,11 @@ export const ContextUsage = ({
           ? 'medium'
           : 'low'
     return { percent, level, tokens: detail.tokens, estimated: detail.estimated }
-  })()
+  }, [session, model, contextWindow, levelMeta.ratio])
 
   // 可压缩轮次：保留轮数跟随当前档位（省档留得少、长记忆档留得多）
-  const stats = (() => {
+  // 同样改成 useMemo：它会遍历全部轮次，压缩后如果每次重渲染都算一遍同样很重。
+  const stats = useMemo(() => {
     if (!session || !actions) {
       return null
     }
@@ -95,7 +99,7 @@ export const ContextUsage = ({
       allowRefused,
       keepRounds: levelMeta.keepRounds,
     })
-  })()
+  }, [session, actions, allowRefused, levelMeta.keepRounds])
 
   const hasSummary = Boolean(session?.compaction?.summary)
   const canCompact = Boolean(stats && stats.compactable > 0)

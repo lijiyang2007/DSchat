@@ -394,6 +394,13 @@ export const zh = {
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: '展开摘要',
   contextCompactedHide: '收起摘要',
+  compactionPromptTitleAuto: '正在压缩上下文',
+  compactionPromptTitleManual: '正在压缩上下文',
+  compactionPromptKeepOpen: '压缩中，请不要关闭 App 或退出当前对话。',
+  compactionPromptLagHint:
+    '压缩时和压缩结束后的一小段时间里界面可能有点卡，属于正常现象，等几秒就会恢复。',
+  compactionPromptSafeHint:
+    '压缩只影响之后发给模型的内容，本机聊天记录一条都不会删，随时可以往上翻。',
   backToLatest: '回到最新',
   modelSettingsSectionReply: '回复与拒答策略',
   modelSettingsSectionRefusal: '关键词拒答条件',

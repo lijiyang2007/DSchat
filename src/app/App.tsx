@@ -23,6 +23,7 @@ import { UpdateModal } from '../components/settings/UpdateModal.js'
 import { syncDailyTokenDate } from '../services/tokenUsage.js'
 import { checkForUpdates } from '../services/updater.js'
 import { ImageViewer } from '../components/messages/ImageViewer.js'
+import { CompactionPrompt } from '../components/messages/CompactionPrompt.js'
 import { useAndroidBackButton } from '../services/backButton.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
@@ -286,6 +287,8 @@ export const App = () => {
       <TokenLimitModal />
       <UpdateModal />
       <ImageViewer />
+      {/* 压缩中阻塞提示（v2.9.1）：自动压缩在发送链路里触发，必须挂在根部才看得见 */}
+      <CompactionPrompt />
       <Toast />
     </>
   )
