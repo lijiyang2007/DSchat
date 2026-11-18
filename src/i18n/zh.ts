@@ -353,6 +353,7 @@ export const zh = {
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: '展开摘要',
   contextCompactedHide: '收起摘要',
+  backToLatest: '回到最新',
   modelSettingsSectionReply: '回复与拒答策略',
   modelSettingsSectionRefusal: '关键词拒答条件',
   modelSettingsApiOriginLabel: 'API 地址',

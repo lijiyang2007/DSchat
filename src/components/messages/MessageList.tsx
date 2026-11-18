@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
+import { IconChevronDownOutline14 } from '../base/icons.js'
 import {
   buildMessageVersions,
   getVisibleMessages,
@@ -33,6 +34,8 @@ import styles from './MessageList.module.css'
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 /** 消息数超过这个值时启用视口外跳过渲染，避免长会话卡顿 */
 const VIRTUALIZE_THRESHOLD = 30
+/** 距底部超过该值时显示「回到最新」按钮 */
+const SHOW_BACK_TO_BOTTOM_THRESHOLD = 200
 
 export const MessageList = ({
   session,
@@ -53,6 +56,7 @@ export const MessageList = ({
   const stickyRef = useRef(false)
   const scrollTopRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
+  const [showBackToBottom, setShowBackToBottom] = useState(false)
   const messages = getVisibleMessages(session)
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
@@ -71,6 +75,18 @@ export const MessageList = ({
       el.scrollTop = el.scrollHeight
       scrollTopRef.current = el.scrollTop
     }
+  }, [])
+
+  // 按钮专用：绕过 stickyRef 守卫（恒 false，供「生成时不自动滚动」使用），
+  // 直接把滚动容器拉到最新。尊重系统「减少动画」偏好。
+  const forceScrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' })
+    scrollTopRef.current = el.scrollHeight
   }, [])
 
   // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
@@ -109,6 +125,7 @@ export const MessageList = ({
   useLayoutEffect(() => {
     if (lastSessionIdRef.current !== session.id) {
       lastSessionIdRef.current = session.id
+      setShowBackToBottom(false)
       const el = scrollRef.current
       if (el) {
         el.scrollTop = el.scrollHeight
@@ -147,6 +164,9 @@ export const MessageList = ({
       // 只记录用户当前水位；不再因为「滚回底部」就恢复跟随。
       // 自动滚动统一由 stickyRef（恒 false）拦截，避免生成时把视角拽到底。
       scrollTopRef.current = el.scrollTop
+      // 距底部超过阈值才显示「回到最新」按钮。
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+      setShowBackToBottom(distance > SHOW_BACK_TO_BOTTOM_THRESHOLD)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
@@ -161,61 +181,75 @@ export const MessageList = ({
   const itemClass = virtualize ? styles.virtualItem : undefined
   return (
     <ScrollToBottomContext.Provider value={scrollToBottom}>
-      <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
-        <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
-          <div ref={contentRef} className={styles.column}>
-            {session.compaction?.summary ? (
-              <button
-                type="button"
-                className={styles.contextBanner}
-                onClick={() => setSummaryOpen((open) => !open)}
-                aria-expanded={summaryOpen}
-              >
-                <span className={styles.contextBannerText}>
-                  {summaryOpen
-                    ? t('contextCompactedBannerExpanded', {
-                        summary: session.compaction.summary,
-                      })
-                    : t('contextCompactedBanner')}
-                </span>
-                <span className={styles.contextBannerHint}>
-                  {t(summaryOpen ? 'contextCompactedHide' : 'contextCompactedShow')}
-                </span>
-              </button>
-            ) : null}
-            {messages.map((message, index) =>
-              message.role === 'user' ? (
-                <div key={message.id} className={itemClass}>
-                <UserMessage
-                  key={message.id}
-                  sessionId={session.id}
-                  message={message}
-                  retryUploadId={uploadRetryId}
-                  isFirst={index === 0}
-                  isLast={index === lastIndex || index === lastIndex - 1}
-                  busy={streaming}
-                  versions={versions.get(message.id) ?? EMPTY_VERSIONS}
-                  onSelectVersion={selectVersion}
-                />
-                </div>
-              ) : (
-                <div key={message.id} className={itemClass}>
-                <AssistantMessage
-                  key={message.id}
-                  sessionId={session.id}
-                  message={message}
-                  isLast={index === lastIndex}
-                  streaming={streaming && index === lastIndex}
-                  busy={streaming}
-                  versions={versions.get(message.id) ?? EMPTY_VERSIONS}
-                  onSelectVersion={selectVersion}
-                />
-                </div>
-              )
-            )}
+      <div className={styles.wrapper}>
+        <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
+          <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
+            <div ref={contentRef} className={styles.column}>
+              {session.compaction?.summary ? (
+                <button
+                  type="button"
+                  className={styles.contextBanner}
+                  onClick={() => setSummaryOpen((open) => !open)}
+                  aria-expanded={summaryOpen}
+                >
+                  <span className={styles.contextBannerText}>
+                    {summaryOpen
+                      ? t('contextCompactedBannerExpanded', {
+                          summary: session.compaction.summary,
+                        })
+                      : t('contextCompactedBanner')}
+                  </span>
+                  <span className={styles.contextBannerHint}>
+                    {t(summaryOpen ? 'contextCompactedHide' : 'contextCompactedShow')}
+                  </span>
+                </button>
+              ) : null}
+              {messages.map((message, index) =>
+                message.role === 'user' ? (
+                  <div key={message.id} className={itemClass}>
+                    <UserMessage
+                      key={message.id}
+                      sessionId={session.id}
+                      message={message}
+                      retryUploadId={uploadRetryId}
+                      isFirst={index === 0}
+                      isLast={index === lastIndex || index === lastIndex - 1}
+                      busy={streaming}
+                      versions={versions.get(message.id) ?? EMPTY_VERSIONS}
+                      onSelectVersion={selectVersion}
+                    />
+                  </div>
+                ) : (
+                  <div key={message.id} className={itemClass}>
+                    <AssistantMessage
+                      key={message.id}
+                      sessionId={session.id}
+                      message={message}
+                      isLast={index === lastIndex}
+                      streaming={streaming && index === lastIndex}
+                      busy={streaming}
+                      versions={versions.get(message.id) ?? EMPTY_VERSIONS}
+                      onSelectVersion={selectVersion}
+                    />
+                  </div>
+                )
+              )}
+            </div>
           </div>
+          {footer}
         </div>
-        {footer}
+
+        {showBackToBottom ? (
+          <button
+            type="button"
+            className={styles.backToBottom}
+            onClick={forceScrollToBottom}
+            aria-label={t('backToLatest')}
+            title={t('backToLatest')}
+          >
+            <IconChevronDownOutline14 />
+          </button>
+        ) : null}
       </div>
     </ScrollToBottomContext.Provider>
   )

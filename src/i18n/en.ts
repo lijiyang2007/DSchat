@@ -369,6 +369,7 @@ export const en = {
   contextCompactedBannerExpanded: '{summary}',
   contextCompactedShow: 'Show summary',
   contextCompactedHide: 'Hide summary',
+  backToLatest: 'Back to latest',
   modelSettingsSectionReply: 'Reply & Refusal Behavior',
   modelSettingsSectionRefusal: 'Keyword Refusal Rules',
   modelSettingsApiOriginLabel: 'API Base URL',

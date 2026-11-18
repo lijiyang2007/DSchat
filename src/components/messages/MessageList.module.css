@@ -1,3 +1,10 @@
+.wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .container {
   flex: 1;
   min-height: 0;
@@ -69,4 +76,46 @@
 .virtualItem {
   content-visibility: auto;
   contain-intrinsic-size: auto 160px;
+}
+
+/* 回到最新：绕过「生成时不自动滚动」的 sticky 守卫，点一下回到底部 */
+.backToBottom {
+  position: absolute;
+  right: 20px;
+  bottom: 170px;
+  z-index: 11;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  background-color: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    transform var(--ds-transition-duration) var(--ds-ease-in-out);
+  outline: none;
+}
+
+.backToBottom:active {
+  transform: scale(0.94);
+}
+
+@media (hover: hover) {
+  .backToBottom:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.backToBottom:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-button-primary-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backToBottom {
+    transition: none;
+  }
 }
