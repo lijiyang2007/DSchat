@@ -57,7 +57,7 @@ export const emptyModel = (): ProviderModel => ({
   inputs: { text: true, image: false },
 })
 
-/** 内置的官方供应商 */
+/** 内置的官方供应商；配置由官方客户端维护，不开放编辑（v2.7.1 起） */
 export const createOfficialProvider = (): Provider => ({
   id: 'deepseek-official',
   name: 'DeepSeek',
@@ -72,12 +72,14 @@ export const createOfficialProvider = (): Provider => ({
       id: 'deepseek-flash',
       name: 'DeepSeek-V4.1-Flash',
       contextWindow: 1_000_000,
+      maxTokens: 65536,
       inputs: { text: true, image: true },
     },
     {
       id: 'deepseek-v4-pro',
       name: 'DeepSeek-V4-Pro',
       contextWindow: 256_000,
+      maxTokens: 65536,
       inputs: { text: true, image: true },
     },
   ],

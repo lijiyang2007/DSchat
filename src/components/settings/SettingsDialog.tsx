@@ -7,6 +7,7 @@ import {
   IconDownloadOutline16,
   IconEditOutline16,
   IconFollowsystemOutline16,
+  IconHeartOutline16,
   IconLightOutline16,
   IconLinkOutline16,
   IconRefreshOutline16,
@@ -69,6 +70,7 @@ import { FeedbackSettings } from './FeedbackSettings.js'
 import { MemorySettings } from './MemorySettings.js'
 import { ModelSettings } from './ModelSettings.js'
 import { ProviderEditor } from './ProviderEditor.js'
+import { SponsorSettings } from './SponsorSettings.js'
 import {
   closeSettings,
   closeProviderEditor,
@@ -354,6 +356,19 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
           onClick={() => open('about')}
         />
         <SettingsEntry
+          icon={<IconDataOutline16 />}
+          title={t('updateAnnouncementEntryLabel')}
+          description={t('updateAnnouncementEntryDesc')}
+          onClick={() => {
+            // 有缓存结果直接展示；否则先检查再由竞速回调打开弹窗
+            if (latest) {
+              openUpdateModal()
+            } else {
+              void checkForUpdates({ manual: true })
+            }
+          }}
+        />
+        <SettingsEntry
           icon={<IconLinkOutline16 />}
           title={t('settingsHomeAgreementLabel')}
           onClick={() => open('about')}
@@ -362,6 +377,13 @@ const SettingsHomeGroups = ({ open }: { open: (section: SettingsSection) => void
           icon={<IconSearchOutline16 />}
           title={t('settingsHomeHelpLabel')}
           onClick={() => open('feedback')}
+        />
+        {/* 设置最底层：感谢赞助 */}
+        <SettingsEntry
+          icon={<IconHeartOutline16 />}
+          title={t('sponsorEntryLabel')}
+          description={t('sponsorEntryDesc')}
+          onClick={() => open('sponsor')}
         />
       </SettingsGroup>
     </>
@@ -623,7 +645,9 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
                   ? 'updateSectionLabel'
                   : opened === 'feedback'
                     ? 'settingsHomeHelpLabel'
-                    : 'settings',
+                    : opened === 'sponsor'
+                      ? 'sponsorPageTitle'
+                      : 'settings',
         desc: 'settingsPageSubtitle',
         icon: null,
       })
@@ -657,6 +681,9 @@ const SettingsContent = ({ closing }: { closing: boolean }) => {
     }
     if (opened === 'feedback') {
       return <FeedbackSettings />
+    }
+    if (opened === 'sponsor') {
+      return <SponsorSettings />
     }
     if (opened === 'model') {
       return <ModelSettings />

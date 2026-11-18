@@ -848,3 +848,37 @@
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
 }
+
+/* 感谢赞助页：说明与名单 */
+.sponsorIntro {
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.sponsorList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sponsorItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  border-bottom: 1px solid var(--dsw-alias-line-border-secondary);
+}
+
+.sponsorItem:last-child {
+  border-bottom: none;
+}
+
+.sponsorIcon {
+  display: inline-flex;
+  color: #f5455c;
+}

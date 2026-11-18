@@ -121,6 +121,9 @@ const toOpenAIMessages = (
   return result
 }
 
+/** 供非流式层复用的 OpenAI 消息组装 */
+export { toOpenAIMessages }
+
 type ResponsesInputPart =
   | { type: 'input_text'; text: string }
   | { type: 'input_image'; image_url: string }
@@ -135,8 +138,7 @@ const toResponsesInput = (
   body: CreateMessageRequest,
   inlineImages: ReadonlyMap<string, string>,
   inlineTexts: ReadonlyMap<string, string>
-): ResponsesInputItem[] => {
-  const result: ResponsesInputItem[] = []
+): ResponsesInputItem[] => {  const result: ResponsesInputItem[] = []
   let pendingReminder = ''
   for (const msg of body.messages) {
     if (msg.role === 'latest_reminder') {
@@ -183,6 +185,10 @@ const toResponsesInput = (
   }
   return result
 }
+
+/** 供非流式层复用的 Responses 输入组装 */
+export { toResponsesInput }
+export { parseOpenAIUsage, mapFinishReason }
 
 const mapFinishReason = (reason: unknown): 'end_turn' | 'max_tokens' | 'refusal' => {
   if (reason === 'length' || reason === 'max_output_tokens') {

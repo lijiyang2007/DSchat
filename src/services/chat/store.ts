@@ -2,12 +2,15 @@ import { create } from 'zustand'
 import { translate } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import { showToast } from '../../components/base/toastState.js'
-import { ApiError, streamMessage } from '../api/client.js'
+import { ApiError } from '../api/client.js'
+import {
+  fetchAnthropicMessage,
+  fetchOpenAIMessage,
+  fetchResponsesMessage,
+} from '../api/fetchOnce.js'
 import {
   blobToDataUrl,
   recognizeWithOpenAIVision,
-  streamOpenAIMessage,
-  streamResponsesMessage,
 } from '../api/openai.js'
 import { getApiOrigin } from '../api/origin.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
@@ -1321,9 +1324,10 @@ const summarizeRounds = async ({
     max_tokens: 1200,
   }
   const origin = settings.apiOrigin || getApiOrigin()
+  // 压缩摘要同样走非流式：简短输入输出，一次性拿结果更稳
   const events =
     settings.chatProtocol === 'responses'
-      ? streamResponsesMessage(
+      ? fetchResponsesMessage(
           origin,
           apiKey,
           body,
@@ -1333,7 +1337,7 @@ const summarizeRounds = async ({
           settings.customHeaders
         )
       : settings.chatProtocol === 'openai' || settings.chatProtocol === 'local'
-        ? streamOpenAIMessage(
+        ? fetchOpenAIMessage(
             origin,
             apiKey,
             body,
@@ -1342,7 +1346,7 @@ const summarizeRounds = async ({
             new Map(),
             settings.customHeaders
           )
-        : streamMessage(apiKey, body, signal)
+        : fetchAnthropicMessage(apiKey, body, signal)
 
   let output = ''
   for await (const event of events) {
@@ -1575,9 +1579,14 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             ? { title: { enabled: true } }
             : {}),
         }
+        /**
+         * v2.7.1 起整体取消流式输出：部分网关流式表现不稳定（增量丢失、蹦段、断流），
+         * 回归非流式一次性拿完整回答；事件仍按统一 MessageStreamEvent 合成，
+         * 渲染、用量统计、标题提取管线原样复用。
+         */
         const events =
           settings.chatProtocol === 'responses'
-            ? streamResponsesMessage(
+            ? fetchResponsesMessage(
                 settings.apiOrigin || getApiOrigin(),
                 settings.apiKey ?? '',
                 requestBody,
@@ -1587,7 +1596,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                 settings.customHeaders
               )
             : settings.chatProtocol === 'openai' || settings.chatProtocol === 'local'
-              ? streamOpenAIMessage(
+              ? fetchOpenAIMessage(
                   settings.apiOrigin || getApiOrigin(),
                   settings.apiKey ?? '',
                   requestBody,
@@ -1596,7 +1605,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   inlinePrepared.inlineTexts,
                   settings.customHeaders
                 )
-              : streamMessage(settings.apiKey ?? '', requestBody, controller.signal)
+              : fetchAnthropicMessage(settings.apiKey ?? '', requestBody, controller.signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'

@@ -15,6 +15,7 @@ export type SettingsSection =
   | 'model'
   | 'memory'
   | 'data'
+  | 'sponsor'
 
 /**
  * 设置页导航状态。
@@ -36,9 +37,15 @@ export const useSettingsDialog = create(() => ({
   editingProviderId: null as string | null,
 }))
 
-/** 进入某个供应商的编辑子页 */
-export const openProviderEditor = (id: string) =>
+/** 进入某个供应商的编辑子页；官方内置条目不开放编辑（登录账号即自动可用） */
+export const openProviderEditor = (id: string) => {
+  const provider = useSettings.getState().providers.find((item) => item.id === id)
+  if (provider?.builtin) {
+    showToast({ key: 'providerOfficialLockedToast' })
+    return
+  }
   useSettingsDialog.setState({ editingProviderId: id })
+}
 
 /** 关闭供应商编辑子页（保存或取消后调用） */
 export const closeProviderEditor = () =>

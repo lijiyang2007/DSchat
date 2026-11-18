@@ -63,16 +63,21 @@ export const ProviderList = ({ onEdit }: { onEdit: (id: string) => void }) => {
               </div>
             </div>
             <div className={styles.actions}>
-              <Button
-                variant="outlined"
-                size="s"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onEdit(provider.id)
-                }}
-              >
-                {t('providerEdit')}
-              </Button>
+              {/* 官方条目不开放编辑：登录账号即自动可用，模型能力由客户端内置 */}
+              {provider.builtin ? (
+                <span className={styles.metaText}>{t('providerOfficialLocked')}</span>
+              ) : (
+                <Button
+                  variant="outlined"
+                  size="s"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onEdit(provider.id)
+                  }}
+                >
+                  {t('providerEdit')}
+                </Button>
+              )}
               {provider.custom ? (
                 <button
                   type="button"

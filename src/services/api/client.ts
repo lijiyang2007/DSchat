@@ -16,6 +16,10 @@ const anthropicBaseUrl = () => `${getApiOrigin()}/anthropic/v1`
 /** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
 const FILES_BETA = 'files-api-2025-04-14'
 
+/** 供非流式层复用的 Anthropic 地址与鉴权头 */
+export const anthropicUrl = anthropicBaseUrl
+export const anthropicAuthHeaders = (apiKey: string, beta: boolean) => anthropicHeaders(apiKey, beta)
+
 export type ApiErrorKind =
   /** 非 2xx 响应 */
   | 'http'

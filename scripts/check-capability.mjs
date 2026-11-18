@@ -24,6 +24,14 @@ check(
   allowsVision('auto', 'deepseek-chat', 'deepseek') === false
 )
 check(
+  'auto + deepseek-flash 官方协议 → 支持看图（v2.7.1）',
+  allowsVision('auto', 'deepseek-flash', 'deepseek') === true
+)
+check(
+  'auto + deepseek-v4-pro 官方协议 → 支持看图（v2.7.1）',
+  allowsVision('auto', 'deepseek-v4-pro', 'deepseek') === true
+)
+check(
   'auto + deepseek-chat 走第三方 → 按可看处理',
   allowsVision('auto', 'deepseek-chat', 'openai') === true
 )
