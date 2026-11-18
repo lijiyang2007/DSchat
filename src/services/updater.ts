@@ -391,22 +391,77 @@ const pickHighestRelease = (raw: unknown): ReleaseInfo | null => {
 }
 
 /**
+ * 把 release 的公告正文补上（2.7.8）。
+ *
+ * 根因：checkForUpdates 是三路竞速，jsDelivr / raw 探针只带版本号、body 为空，
+ * 它们常常比 GitHub 直连先返回，赢了竞速 → 弹窗里「更新内容」一片空白，
+ * 用户根本看不到这次更新改了什么。这里在展示前，若正文缺失就再拉一次
+ * Releases 列表按版本号精确取正文补上。
+ */
+const fillReleaseBody = async (release: ReleaseInfo): Promise<ReleaseInfo> => {
+  if (release.body.trim()) {
+    return release
+  }
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetchWithDevProxy(RELEASES_LIST_API, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      return release
+    }
+    const payload: unknown = await response.json()
+    if (!Array.isArray(payload)) {
+      return release
+    }
+    for (const item of payload) {
+      if (typeof item !== 'object' || item === null) {
+        continue
+      }
+      const obj = item as Record<string, unknown>
+      if (obj.draft === true) {
+        continue
+      }
+      const parsed = parseGitHubRelease(obj)
+      if (parsed && compareVersionNumbers(parsed.version, release.version) === 0 && parsed.body.trim()) {
+        return { ...release, body: parsed.body, htmlUrl: parsed.htmlUrl || release.htmlUrl }
+      }
+    }
+  } catch {
+    // 补全失败就用原 release（至少版本号与下载地址是对的）
+  } finally {
+    window.clearTimeout(timeout)
+  }
+  return release
+}
+
+/**
  * 应用一次检查结果（统一三路来源的落库逻辑）。
  * @returns 是否成功拿到 release 信息
  */
-const applyReleaseResult = (release: ReleaseInfo, manual: boolean): boolean => {
+const applyReleaseResult = async (release: ReleaseInfo, manual: boolean): Promise<boolean> => {
   const current = getCurrentAppVersion()
   // 只有严格更高才算更新：同版本或降级一律不提示（版本规则见 versioning.ts）
   const verdict = evaluateInstall(current.versionName, release.version)
   const hasUpdate = verdict.kind === 'upgrade'
   const skipped = readSkippedVersion()
+  // 先落库（版本号立即可用），正文稍后补全——避免用户干等
   useUpdater.setState({
-    checking: false,
+    checking: true,
     latest: release,
     hasUpdate,
     lastCheckedAt: Date.now(),
     error: null,
-    modalOpen: hasUpdate && (manual || skipped !== release.version),
+    modalOpen: false,
+  })
+  const withBody = await fillReleaseBody(release)
+  useUpdater.setState({
+    checking: false,
+    latest: withBody,
+    hasUpdate,
+    modalOpen: hasUpdate && (manual || skipped !== withBody.version),
   })
   if (manual && !hasUpdate) {
     showToast({ key: 'updateUpToDateToast', params: { version: current.versionName } })
@@ -554,7 +609,7 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
     .then(({ value }) => value)
     .catch(() => null)
   if (release) {
-    applyReleaseResult(release, manual)
+    await applyReleaseResult(release, manual)
     return
   }
 

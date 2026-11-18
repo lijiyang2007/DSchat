@@ -19,12 +19,15 @@ import {
   IconThinkOutline14,
 } from '../base/icons.js'
 import {
+  activeProvider,
   matchesRefusalKeyword,
+  setModel,
   setSearch,
   setThinkingEffort,
   useSettings,
   type ThinkingEffort,
 } from '../../services/settings.js'
+import { accountToken } from '../../services/account.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
@@ -85,6 +88,35 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         return t('thinkingSwitch')
     }
   })()
+
+  /**
+   * 深度思考按钮点击（v2.7.8）。
+   * 官方账号 + 官方供应商的用户开启深度思考时，自动切到 pro 模型
+   * （flash 不支持高强度思考），并弹一句简短提示——pro 更快消耗额度。
+   * 其余情况照旧循环切换档位。
+   */
+  const onThinkingClick = () => {
+    const next = nextEffort()
+    const settings = useSettings.getState()
+    // 官方账号用户只要选择深度思考（非 off），就确保用 Pro 模型——flash 扛不住高强度思考
+    if (next !== 'off') {
+      const provider = activeProvider(settings)
+      const isOfficial = provider.id === 'deepseek-official' || provider.builtin === true
+      if (isOfficial && accountToken()) {
+        const pro = provider.models.find((m) => m.id === 'deepseek-v4-pro' || /pro/i.test(m.id))
+        if (pro && settings.model !== pro.id) {
+          setModel(pro.id)
+          setThinkingEffort(next)
+          // 额度提示优先，盖掉下面的普通开关反馈
+          showToast({ key: 'thinkingProQuotaHint' })
+          return
+        }
+      }
+    }
+    setThinkingEffort(next)
+    // 每次点击都给明确反馈，避免真机上「按了没反应」的错觉
+    showToast({ key: next === 'off' ? 'thinkingOffToast' : 'thinkingOnToast' })
+  }
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -262,7 +294,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 )}
                 aria-label={t('thinkingEffortTooltip', { level: effortLabel })}
                 aria-pressed={thinking}
-                onClick={() => setThinkingEffort(nextEffort())}
+                onClick={onThinkingClick}
               >
                 <IconThinkOutline14 />
                 <span className={styles.toggleLabel}>{effortLabel}</span>
@@ -274,7 +306,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 className={clsx(styles.toggle, search && styles.selected)}
                 aria-label={t('search')}
                 aria-pressed={search}
-                onClick={() => setSearch(!search)}
+                onClick={() => {
+                  setSearch(!search)
+                  showToast({ key: search ? 'searchOffToast' : 'searchOnToast' })
+                }}
               >
                 <IconGlobeLanguageOutline14 />
                 <span className={styles.toggleLabel}>{t('search')}</span>
