@@ -17,6 +17,7 @@ const check = (label, ok, detail = '') => {
 }
 
 const chatInput = read('src/components/chatInput/ChatInput.tsx')
+const chatInputCss = read('src/components/chatInput/ChatInput.module.css')
 const updater = read('src/services/updater.ts')
 const zh = read('src/i18n/zh.ts')
 const en = read('src/i18n/en.ts')
@@ -29,6 +30,26 @@ check('仅官方账号触发', /isOfficial && accountToken\(\)/.test(chatInput))
 check('弹额度提示', /thinkingProQuotaHint/.test(chatInput))
 check('按钮 onClick 已换成新处理', /onClick=\{onThinkingClick\}/.test(chatInput))
 check('双语提示文案齐备', /thinkingProQuotaHint/.test(zh) && /thinkingProQuotaHint/.test(en))
+
+console.log('\n一之二、按钮文字标签始终显示（不折叠成纯图标）')
+check(
+  'CSS 不再用 collapsedToggles 隐藏文字',
+  !/\.collapsedToggles \.toggleLabel/.test(chatInputCss) && !/display:\s*none/.test(
+    (chatInputCss.match(/\.toggleLabel[^}]*}/g) ?? []).join('')
+  )
+)
+check(
+  '移除折叠用的 ResizeObserver 逻辑',
+  !/collapsedToggles/.test(chatInput) && !/ResizeObserver/.test(chatInput)
+)
+check(
+  '窄屏改为横向滚动而非隐藏',
+  /overflow-x:\s*auto/.test(chatInputCss)
+)
+check(
+  '两个按钮都渲染文字标签',
+  /toggleLabel/.test(chatInput) && (chatInput.match(/toggleLabel/g) ?? []).length >= 2
+)
 
 console.log('\n二、更新公告正文补全（竞速探针 body 为空的修复）')
 check('有 fillReleaseBody 补全逻辑', /const fillReleaseBody/.test(updater))

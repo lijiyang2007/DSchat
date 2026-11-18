@@ -3,7 +3,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type RefObject,
@@ -125,30 +124,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const togglesRef = useRef<HTMLDivElement>(null)
 
   const openPicker = (ref: RefObject<HTMLInputElement>) => {
     if (ensureApiKey()) {
       ref.current?.click()
     }
   }
-
-  useLayoutEffect(() => {
-    const toggles = togglesRef.current
-    if (!toggles) {
-      return
-    }
-
-    const updateLabels = () => {
-      toggles.classList.remove(styles.collapsedToggles)
-      toggles.classList.toggle(styles.collapsedToggles, toggles.scrollWidth > toggles.clientWidth)
-    }
-
-    updateLabels()
-    const observer = new ResizeObserver(updateLabels)
-    observer.observe(toggles)
-    return () => observer.disconnect()
-  }, [t])
 
   const acceptFiles = (files: File[]) => {
     if (files.length === 0 || useChatStore.getState().importingHistory) {
@@ -283,7 +264,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         </div>
         <div className={styles.functionRow}>
           {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
-          <div ref={togglesRef} className={styles.toggles}>
+          <div className={styles.toggles}>
             <Tooltip content={t('thinkingEffortTooltip', { level: effortLabel })}>
               <button
                 type="button"

@@ -263,9 +263,12 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* 文字标签始终显示：空间不足时横向滚动，而不是把文字隐藏掉只剩图标 */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.collapsedToggles .toggleLabel {
+.toggles::-webkit-scrollbar {
   display: none;
 }
 
