@@ -787,7 +787,8 @@ const buildReasoningPayload = (
       enable_thinking: effort !== 'off',
     }
   }
-  // DeepSeek 原生（Anthropic 格式）：output_config.effort
+  // DeepSeek 原生（Anthropic 格式）：off 返回空对象——thinking.type=disabled 已关闭思考；
+  // 非 off 时发 output_config.effort 控制强度
   return effort === 'off' ? {} : { output_config: { effort: mapped === 'none' ? 'low' : mapped } }
 }
 
@@ -1570,7 +1571,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           .filter(Boolean)
           .join('\n\n')
         const tools = serverTools(initial.search ?? false, settings.readUrl)
-        // 思考程度：off 关闭思考；其余按协议把强度真正发给服务端
+        // 思考程度：off 也要发协议字段——第三方网关认 enable_thinking:false /
+        // reasoning.effort:none，不发就按各自默认继续思考（2.7.4 修复）；
+        // DeepSeek 原生协议 off 返回空对象，由 thinking.type=disabled 关闭。
         const effort = settings.thinkingEffort
         const thinkingEnabled = effort !== 'off'
         const requestBody: CreateMessageRequest = {
@@ -1578,7 +1581,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           ...(system ? { system } : {}),
           messages,
           thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },
-          ...(thinkingEnabled ? buildReasoningPayload(effort, settings.chatProtocol) : {}),
+          ...buildReasoningPayload(effort, settings.chatProtocol),
           ...(settings.safetyCheck ? { safety_check: SAFETY_CHECK } : {}),
           ...(tools && tools.length > 0 ? { tools } : {}),
           ...(settings.temperature !== null ? { temperature: settings.temperature } : {}),
@@ -1614,7 +1617,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   inlinePrepared.inlineTexts,
                   settings.customHeaders
                 )
-              : fetchAnthropicMessage(settings.apiKey ?? '', requestBody, controller.signal)
+              : fetchAnthropicMessage(
+                  settings.apiKey ?? '',
+                  requestBody,
+                  controller.signal,
+                  messages.some(
+                    (message) =>
+                      typeof message.content !== 'string' &&
+                      message.content.some((block) => block.type === 'image' || block.type === 'document')
+                  )
+                )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'

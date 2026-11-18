@@ -345,7 +345,12 @@ const initialProviders = (): Provider[] => {
       if (Array.isArray(parsed) && parsed.length > 0) {
         // 补齐内置条目，防止旧数据里没有它
         const hasOfficial = parsed.some((item) => item.id === 'deepseek-official')
-        return hasOfficial ? parsed : [createOfficialProvider(), ...parsed]
+        const list = hasOfficial ? parsed : [createOfficialProvider(), ...parsed]
+        // 官方条目配置自愈（2.7.4）：v2.7.1 前允许编辑官方条目，部分设备上
+        // 它被改成了第三方协议/地址——切回官方就 404。锁死后用内置值修复脏配置。
+        return list.map((item) =>
+          item.id === 'deepseek-official' ? { ...createOfficialProvider(), apiKey: item.apiKey } : item
+        )
       }
     } catch {
       // 解析失败时走下面的迁移
@@ -527,7 +532,23 @@ export const setActiveProvider = (id: string) => {
   if (!providers.some((item) => item.id === id)) {
     return
   }
-  commitProviders(providers, id)
+  // 官方条目运行时自愈：升级前被改坏的配置在切换瞬间修复并落盘（2.7.4）
+  const official = providers.find((item) => item.id === 'deepseek-official')
+  const repaired = official
+    ? { ...createOfficialProvider(), apiKey: official.apiKey }
+    : undefined
+  const dirty =
+    official !== undefined &&
+    repaired !== undefined &&
+    (official.baseUrl !== repaired.baseUrl ||
+      official.protocol !== repaired.protocol ||
+      official.headers !== repaired.headers)
+  commitProviders(
+    dirty && repaired
+      ? providers.map((item) => (item.id === 'deepseek-official' ? repaired : item))
+      : providers,
+    id
+  )
 }
 
 /** 新增一个空白供应商并直接切过去；返回它的 id */

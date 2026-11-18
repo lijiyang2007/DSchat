@@ -38,7 +38,7 @@ check('OpenAI 非流式 stream:false', /fetchOpenAIMessage[\s\S]{0,900}stream: f
 check('Responses 非流式 stream:false', /fetchResponsesMessage[\s\S]{0,900}stream: false/.test(fetchOnce))
 check('Anthropic 非流式 stream:false', /fetchAnthropicMessage[\s\S]{0,900}stream: false/.test(fetchOnce))
 check('对话主链路不再用 streamMessage', !store.includes('streamMessage('))
-check('对话主链路用 fetchAnthropicMessage', store.includes('fetchAnthropicMessage(settings.apiKey'))
+check('对话主链路用 fetchAnthropicMessage', /fetchAnthropicMessage\(/.test(store) && /block\.type === 'image' \|\| block\.type === 'document'/.test(store))
 check('压缩摘要也走非流式', store.includes('fetchResponsesMessage(') && store.includes('fetchOpenAIMessage('))
 check('合成统一事件流 emitUnified', fetchOnce.includes('emitUnified'))
 check('合成流以 message_stop 结束', /emitUnified[\s\S]+message_stop/.test(fetchOnce))
@@ -94,6 +94,14 @@ check('摘要输入有总体积上限', compaction.includes('SUMMARY_INPUT_TOTAL
 check('压缩提示文案已加', zh.includes('contextCompactingHint') && en.includes('contextCompactingHint'))
 check('压缩中状态暴露给 UI', store.includes('compacting: Record<string, boolean>') && store.includes("compacting: { ...state.compacting"))
 check('等待点旁显示压缩提示', read('src/components/messages/AssistantMessage.tsx').includes('contextCompactingHint'))
+
+console.log('\n六、思考关闭与官方自愈（2.7.4）')
+check('off 档也发协议字段（enable_thinking:false）', /buildReasoningPayload\(effort, settings\.chatProtocol\)/.test(store) && !/\?\s*buildReasoningPayload/.test(store))
+check('openai 协议 off 带 enable_thinking:false', /enable_thinking: effort !== 'off'/.test(store))
+check('官方条目启动时自愈', /createOfficialProvider\(\), apiKey: item\.apiKey/.test(read('src/services/settings.ts')))
+check('官方条目切换时自愈', /setActiveProvider[\s\S]{0,900}dirty[\s\S]{0,400}repaired/.test(read('src/services/settings.ts')))
+check('anthropic-beta 按文件引用携带', /fetchAnthropicMessage[\s\S]{0,200}hasFileRef/.test(read('src/services/api/fetchOnce.ts')))
+check('store 调用传 hasFileRef', store.includes("block.type === 'image' || block.type === 'document'"))
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

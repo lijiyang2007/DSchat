@@ -222,11 +222,13 @@ export async function* fetchResponsesMessage(
 export async function* fetchAnthropicMessage(
   apiKey: string,
   body: CreateMessageRequest,
-  signal: AbortSignal
+  signal: AbortSignal,
+  hasFileRef = false
 ): AsyncGenerator<MessageStreamEvent> {
   const response = await request(anthropicUrl(), {
     method: 'POST',
-    headers: { ...anthropicAuthHeaders(apiKey, false), 'Content-Type': 'application/json' },
+    // 引用 file_id 的请求必须带 anthropic-beta 头（图片/文档块会 400）
+    headers: { ...anthropicAuthHeaders(apiKey, hasFileRef), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...body,
       // 非流式请求不带 title 生成（title 参数只在流式扩展模式验证过），避免网关报错
