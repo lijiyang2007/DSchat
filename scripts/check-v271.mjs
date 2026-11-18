@@ -91,16 +91,26 @@ check('启动时修复运行时扁平键（2.7.5）', /repairOfficialRuntimeKeys
 check('运行时地址在自愈后读取', settingsSrc.indexOf('repairOfficialRuntimeKeys()') < settingsSrc.indexOf('const initialApiOrigin'))
 check('压缩提示仍在（2.7.2 功能保留）', store.includes('compacting: Record<string, boolean>') && read('src/components/messages/AssistantMessage.tsx').includes('contextCompactingHint'))
 
-console.log('\n七、语音锁死官方账号（2.7.5）')
+console.log('\n七、语音走官方 tools 接口（2.7.5 起，2.7.6 修正鉴权）')
 const speech = read('src/services/api/speech.ts')
 check('speech 不再接受自定义渠道', !speech.includes('SpeechChannelOverride') && !/custom\?/.test(speech))
 check('语音固定官方 /v1/tools 路径', speech.includes('/v1/tools'))
-check('鉴权只认 x-dsh-auth-token', /x-dsh-auth-token/.test(speech) && !/Bearer \$\{/.test(speech))
-check('未登录抛固定错误并有就绪判定', /speechAccountError/.test(speech) && /speechAccountReady/.test(speech))
-check('朗读入口未登录拦截', /speechAccountReady\(\)/.test(read('src/services/speech/readAloud.ts')))
-check('语音输入未登录拦截', /speechAccountReady\(\)/.test(read('src/components/chatInput/useVoiceInput.ts')))
+// 2.7.5 曾锁死账号 token，实测官方 /v1/tools/* 只认 Bearer API Key，账号 token 必然 401
+check(
+  '语音鉴权用 Bearer API Key（官方 tools 接口不接受账号 token）',
+  /Authorization: `Bearer \$\{key\}`/.test(speech) &&
+    !speech
+      .split('\n')
+      .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+      .join('\n')
+      .includes('x-dsh-auth-token')
+)
+check('未配置 Key 抛固定错误并有就绪判定', /speechAccountError/.test(speech) && /speechAccountReady/.test(speech))
+check('朗读入口未配置 Key 时拦截', /speechAccountReady\(\)/.test(read('src/services/speech/readAloud.ts')))
+check('语音输入未配置 Key 时拦截', /speechAccountReady\(\)/.test(read('src/components/chatInput/useVoiceInput.ts')))
 check('设置页渠道卡片已移除', !read('src/components/settings/ModelSettings.tsx').includes('CapabilityChannelCard'))
-check('未登录提示文案齐备', zh.includes('ttsNeedsAccount') && zh.includes('speechRequiresAccount') && en.includes('ttsNeedsAccount'))
+check('未配置 Key 的提示文案齐备', zh.includes('ttsNeedsAccount') && zh.includes('speechRequiresAccount') && en.includes('ttsNeedsAccount'))
+check('设置页有语音 API Key 输入框', read('src/components/settings/ModelSettings.tsx').includes('SpeechKeyCell'))
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

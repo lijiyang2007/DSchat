@@ -202,7 +202,7 @@ export const toggleReadAloud = (
   useReadAloud.setState({ messageId, status: 'loading' })
   // 音色在开始朗读时读取，设置中切换后下一次朗读生效
   const { ttsVoice } = useSettings.getState()
-  // 语音锁死官方账号（2.7.5）：未登录直接提示，不发请求
+  // 语音走官方 /v1/tools/tts，只认 API Key（账号 token 会被 401）
   if (!speechAccountReady()) {
     finish(controller)
     onError(speechAccountError())

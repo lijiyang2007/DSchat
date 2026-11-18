@@ -11,13 +11,22 @@ import type {
   MessageStreamEvent,
 } from './types.js'
 
-/** Anthropic 兼容接口的前缀 */
+/** Anthropic 兼容接口的前缀（只是前缀，后面还要拼 /messages、/files） */
 const anthropicBaseUrl = () => `${getApiOrigin()}/anthropic/v1`
 /** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
 const FILES_BETA = 'files-api-2025-04-14'
 
-/** 供非流式层复用的 Anthropic 地址与鉴权头 */
-export const anthropicUrl = anthropicBaseUrl
+/**
+ * Messages 端点的完整地址，供非流式层（fetchOnce）直接使用。
+ *
+ * 注意：这里返回的是 /anthropic/v1/messages 全路径，不是 /anthropic/v1 前缀。
+ * 2.7.1 引入非流式层时把前缀当成了端点，请求打到 /anthropic/v1 被服务端 404，
+ * 表现为「官方账号 Not Found」——2.7.4 / 2.7.5 修的是配置自愈，没有修这条路径，
+ * 所以账号登录后仍然用不了。改动这里前先看 scripts/check-official-endpoint.mjs。
+ */
+export const anthropicMessagesUrl = () => `${anthropicBaseUrl()}/messages`
+/** 兼容旧名：历史上被误当作 base 使用，现在指向 Messages 全路径 */
+export const anthropicUrl = anthropicMessagesUrl
 export const anthropicAuthHeaders = (apiKey: string, beta: boolean) => anthropicHeaders(apiKey, beta)
 
 export type ApiErrorKind =

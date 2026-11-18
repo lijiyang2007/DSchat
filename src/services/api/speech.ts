@@ -1,16 +1,18 @@
 /**
- * 语音接口（v2.7.5 起锁死官方）：
- * ASR POST /v1/tools/asr、TTS POST /v1/tools/tts，只由 DeepSeek 官方提供。
+ * 语音接口（DeepSeek 官方 /v1/tools/*）：
+ * ASR POST /v1/tools/asr、TTS POST /v1/tools/tts。
  *
- * 鉴权只认登录账号的 x-dsh-auth-token（走账号额度）：
- * 未登录 DeepSeek 账号时语音功能整体不可用——未登录直接抛 NO_ACCOUNT，
- * 界面把入口禁用并提示「登录官方账号后可用」。
- * API Key 不再用于语音：官方语音按账号额度计费，Key 用户走聊天即可。
+ * 鉴权（2026-11-18 实测 + 官方文档核实）：
+ * 这两个接口只认 `Authorization: Bearer <API Key>`（platform.deepseek.com 申请），
+ * 完全不接受账号登录的 x-dsh-auth-token——带账号 token 一律 401
+ * 「Authentication Fails (missing key)」。
+ *
+ * 所以语音不能用账号额度：必须在设置里填一把官方 API Key。
+ * 2.7.5 曾把语音锁死到账号 token，结果 401，本版改回 API Key。
  */
 
 import { ApiError, request } from './client.js'
 import { getApiOrigin, normalizeOrigin } from './origin.js'
-import { accountToken } from '../account.js'
 
 /** DeepSeek tools 接口地址（固定官方主服务，不再接受自定义渠道） */
 const toolsBaseUrl = (): string => {
@@ -25,27 +27,64 @@ export type TtsVoice = 'stella' | 'tide'
 /** TTS 输出的裸 PCM 参数：24kHz、单声道、16-bit 小端 */
 export const TTS_SAMPLE_RATE = 24000
 
-/** 当前账号是否可使用语音功能：必须登录 DeepSeek 官方账号 */
-export const speechAccountReady = (): boolean => Boolean(accountToken())
+/**
+ * 语音用的官方 API Key：官方 tools 接口只认 Bearer Key。
+ * 未配置时返回空串，由调用方拦在发请求之前。
+ */
+export const speechApiKey = (): string => (readSpeechKey() ?? '').trim()
 
-/** 未登录账号时抛出的固定错误；界面层据此提示登录 */
+/** 本机保存的语音专用 Key（与聊天供应商的 Key 分开，互不影响） */
+const SPEECH_KEY_STORAGE = 'chat-demo:speech-api-key'
+
+const readSpeechKey = (): string | null => {
+  try {
+    return localStorage.getItem(SPEECH_KEY_STORAGE)
+  } catch {
+    return null
+  }
+}
+
+/** 保存语音专用 Key；传空串表示清除 */
+export const setSpeechApiKey = (key: string): void => {
+  try {
+    const trimmed = key.trim()
+    if (trimmed) {
+      localStorage.setItem(SPEECH_KEY_STORAGE, trimmed)
+    } else {
+      localStorage.removeItem(SPEECH_KEY_STORAGE)
+    }
+  } catch {
+    // 存储不可用时只在本次会话里失效
+  }
+}
+
+/** 当前是否可调用语音：有官方 API Key 才行（账号 token 不被 tools 接口接受） */
+export const speechAccountReady = (): boolean => speechApiKey().length > 0
+
+/** 未配置语音 Key 时抛出的固定错误；界面层据此提示去填 Key */
 export const speechAccountError = (): ApiError =>
-  new ApiError('http', 'speech requires a signed-in DeepSeek account', 401)
+  new ApiError('http', 'speech requires a DeepSeek API key', 401)
 
-/** 语音识别：POST /v1/tools/asr（官方账号额度） */
+/** 语音接口的鉴权头：只认 Bearer API Key */
+const speechHeaders = (extra: Record<string, string> = {}): Record<string, string> => {
+  const key = speechApiKey()
+  if (!key) {
+    throw speechAccountError()
+  }
+  return { Authorization: `Bearer ${key}`, ...extra }
+}
+
+/** 语音识别：POST /v1/tools/asr（Bearer API Key） */
 export const transcribe = async (
   audio: Blob,
   signal?: AbortSignal
 ): Promise<string> => {
-  const token = accountToken()
-  if (!token) {
-    throw speechAccountError()
-  }
+  const headers = speechHeaders()
   const form = new FormData()
   form.append('file', audio, 'recording.wav')
   const response = await request(`${toolsBaseUrl()}/asr`, {
     method: 'POST',
-    headers: { 'x-dsh-auth-token': token },
+    headers,
     body: form,
     signal,
   })
@@ -72,19 +111,15 @@ export type SynthesizeResult = {
   isPcm: boolean
 }
 
-/** 语音合成：POST /v1/tools/tts（官方账号额度），返回裸 PCM */
+/** 语音合成：POST /v1/tools/tts（Bearer API Key），返回裸 PCM */
 export const synthesize = async (
   text: string,
   voice: TtsVoice,
   signal: AbortSignal
 ): Promise<SynthesizeResult> => {
-  const token = accountToken()
-  if (!token) {
-    throw speechAccountError()
-  }
   const response = await request(`${toolsBaseUrl()}/tts`, {
     method: 'POST',
-    headers: { 'x-dsh-auth-token': token, 'Content-Type': 'application/json' },
+    headers: speechHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text, voice_id: voice, format: 'pcm', filter_markdown: true }),
     signal,
   })

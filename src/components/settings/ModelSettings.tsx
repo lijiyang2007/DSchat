@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getApiOrigin } from '../../services/api/origin.js'
+import { setSpeechApiKey, speechApiKey } from '../../services/api/speech.js'
 import {
   allowsVision,
   CONTEXT_WINDOW_PRESETS,
@@ -56,6 +57,71 @@ const formatWindow = (tokens: number): string => {
     return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
   }
   return `${Math.round(tokens / 1000)}K`
+}
+
+/**
+ * 语音 API Key 输入框。
+ *
+ * 官方 /v1/tools/asr|tts 只认 `Authorization: Bearer <API Key>`，
+ * 账号登录的 x-dsh-auth-token 会被直接 401，所以语音必须单独配一把 Key。
+ */
+const SpeechKeyCell = () => {
+  const t = useTranslate()
+  const [value, setValue] = useState('')
+  const [saved, setSaved] = useState(() => speechApiKey().length > 0)
+
+  const save = () => {
+    const key = value.trim()
+    if (!key) {
+      return
+    }
+    setSpeechApiKey(key)
+    setValue('')
+    setSaved(true)
+  }
+
+  const clear = () => {
+    setSpeechApiKey('')
+    setValue('')
+    setSaved(false)
+  }
+
+  return (
+    <div className={styles.cell}>
+      <div className={styles.field}>
+        <div className={styles.label}>{t('speechApiKeyLabel')}</div>
+        <div className={styles.description}>{t('speechApiKeyDescription')}</div>
+        <div className={styles.apiKeyInput}>
+          <input
+            type="password"
+            placeholder={t('speechApiKeyPlaceholder')}
+            autoComplete="off"
+            spellCheck={false}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                save()
+              }
+            }}
+          />
+          {value.trim() ? (
+            <button type="button" className={styles.confirm} onClick={save}>
+              {t('confirm')}
+            </button>
+          ) : null}
+        </div>
+        {saved ? (
+          <div className={styles.description}>
+            <span className={styles.apiKeyMask}>{'*'.repeat(24)}</span>
+            <button type="button" className={styles.linkAction} onClick={clear}>
+              {t('delete')}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 type Translate = (key: never, params?: Record<string, string | number>) => string
@@ -620,10 +686,12 @@ export const ModelSettings = () => {
       <div className={styles.cell}>
         <div className={styles.field}>
           <div className={styles.description}>{t('modelSettingsChannelsHintAlt')}</div>
-          {/* 语音锁死官方账号（2.7.5）：渠道卡片移除，登录即用 */}
+          {/* 语音走官方 /v1/tools/*，只认 API Key（账号 token 会被 401），必须单独填一把 */}
           <div className={styles.description}>{t('modelSettingsSpeechAccountHint')}</div>
         </div>
       </div>
+
+      <SpeechKeyCell />
 
       <div className={styles.groupTitle}>{t('modelSettingsSectionProtocol')}</div>
 

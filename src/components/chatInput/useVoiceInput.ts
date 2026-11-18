@@ -74,7 +74,7 @@ export const useVoiceInput = (onText: (text: string) => void) => {
       controller = new AbortController()
       controllerRef.current = controller
       setStatus('transcribing')
-      // 语音锁死官方账号（2.7.5）：未登录在转写前拦截，提示登录
+      // 语音走官方 /v1/tools/asr，只认 API Key（账号 token 会被 401）
       if (!speechAccountReady()) {
         showToast({ key: 'speechRequiresAccount' })
         setStatus('idle')
