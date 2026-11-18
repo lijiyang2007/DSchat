@@ -42,9 +42,52 @@ const getMaxSizeMB = (file: File) =>
     ? MAX_USER_DATA_SIZE_MB
     : MAX_SIZE_MB
 
+/** 常见 MIME 前缀 / 类型对应的可接受扩展名；Android 文件选择器常按 MIME 给文件、不给正确扩展名 */
+const MIME_EXT_HINTS: ReadonlyArray<readonly [string, string[]]> = [
+  ['image/', ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tiff', 'avif']],
+  ['text/', ['txt', 'md', 'csv', 'html', 'json', 'xml', 'yaml', 'log', 'py', 'js', 'ts']],
+  ['application/json', ['json']],
+  ['application/pdf', ['pdf']],
+  ['application/zip', ['zip']],
+  ['application/msword', ['doc']],
+  ['application/vnd.openxmlformats-officedocument', ['docx', 'xlsx', 'pptx', 'ppt']],
+  ['application/vnd.ms-excel', ['xls']],
+  ['application/vnd.ms-powerpoint', ['ppt']],
+  ['application/epub', ['epub']],
+  ['audio/', ['mp3', 'wav', 'm4a']],
+  ['video/', ['mp4', 'webm']],
+]
+
+/**
+ * 校验单个文件是否可接受：
+ * 扩展名在白名单 → 通过；扩展名不在但浏览器给出的 MIME 命中已知类型 → 也放行。
+ * Android WebView 的文件选择器经常返回无扩展名或 MIME 与扩展名不一致的文件，
+ * 只按扩展名拒会把用户明明能用的文件挡在门外（表现为「无法识别」）。
+ */
+const isFileAccepted = (file: File): boolean => {
+  if (isAcceptedExt(file.name)) {
+    return true
+  }
+  const mime = resolveMimeType(file).toLowerCase()
+  if (!mime) {
+    return false
+  }
+  return MIME_EXT_HINTS.some(([prefix, exts]) => {
+    const matched = mime === prefix || mime.startsWith(prefix)
+    if (!matched) {
+      return false
+    }
+    // 有具体扩展名映射时要求文件确实落在其中之一（MIME 宽匹配仍需是已知类型）
+    if (prefix.endsWith('/')) {
+      return true
+    }
+    return exts.some((ext) => isAcceptedExt(`f.${ext}`))
+  })
+}
+
 /** 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加 */
 export const validateFiles = (files: File[], currentCount: number): TranslationMessage | null => {
-  if (files.some((file) => !isAcceptedExt(file.name))) {
+  if (files.some((file) => !isFileAccepted(file))) {
     return { key: 'uploadUnsupportedFormat' }
   }
   const oversized = files.find((file) => file.size > getMaxSizeMB(file) * 1024 * 1024)

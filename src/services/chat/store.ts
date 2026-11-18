@@ -762,15 +762,23 @@ const EFFORT_MAP = {
 const buildReasoningPayload = (
   effort: 'off' | 'low' | 'high' | 'max',
   protocol: 'deepseek' | 'openai' | 'responses' | 'local'
-): Pick<CreateMessageRequest, 'output_config' | 'reasoning_effort' | 'reasoning'> => {
+): Pick<CreateMessageRequest, 'output_config' | 'reasoning_effort' | 'reasoning' | 'enable_thinking'> => {
   const mapped = EFFORT_MAP[effort]
   if (protocol === 'responses') {
     // Responses API：reasoning.effort，none 即关闭
     return { reasoning: { effort: mapped } }
   }
   if (protocol === 'openai' || protocol === 'local') {
-    // OpenAI 兼容：顶层 reasoning_effort；关闭时传 minimal（部分网关不接受 none）
-    return effort === 'off' ? {} : { reasoning_effort: mapped === 'none' ? 'low' : mapped }
+    // OpenAI 兼容网关写法不一：OpenAI 官方认 reasoning_effort；
+    // DeepSeek V3.2 等国产网关认 enable_thinking（布尔）。
+    // 两个都带上，各自取自己认识的字段；关闭时 enable_thinking=false，
+    // reasoning_effort 给 minimal（OpenAI o 系列的最小档）。
+    return {
+      ...(effort === 'off'
+        ? {}
+        : { reasoning_effort: mapped === 'none' ? 'minimal' : mapped }),
+      enable_thinking: effort !== 'off',
+    }
   }
   // DeepSeek 原生（Anthropic 格式）：output_config.effort
   return effort === 'off' ? {} : { output_config: { effort: mapped === 'none' ? 'low' : mapped } }
@@ -1426,10 +1434,46 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
   let reply = initial
   let frame = 0
+  let flushTimer = 0
   const flush = () => {
     cancelAnimationFrame(frame)
     frame = 0
+    if (flushTimer) {
+      window.clearTimeout(flushTimer)
+      flushTimer = 0
+    }
     updateReply(sessionId, reply)
+  }
+  /**
+   * rAF 在 Android WebView 后台标签页或掉帧时会被浏览器暂停/合并，
+   * 增量会攒好几条才一起刷出来（表现为「输出一下子蹦出一大堆」）。
+   * 改成时间驱动：rAF 可用就按帧刷，两帧内没刷出来就退化为 66ms 定时器兜底，
+   * 保证增量最多延迟 66ms 上屏，观感是连续打字而不是突然蹦一大段。
+   */
+  let lastFlushAt = 0
+  const scheduleFlush = () => {
+    if (frame || flushTimer) {
+      return
+    }
+    const now = performance.now()
+    if (now - lastFlushAt >= 66) {
+      lastFlushAt = now
+      flush()
+      return
+    }
+    flushTimer = window.setTimeout(() => {
+      flushTimer = 0
+      lastFlushAt = performance.now()
+      flush()
+    }, 66 - (now - lastFlushAt))
+    frame = requestAnimationFrame(() => {
+      if (flushTimer) {
+        window.clearTimeout(flushTimer)
+        flushTimer = 0
+      }
+      lastFlushAt = performance.now()
+      flush()
+    })
   }
   streamFlushes.set(sessionId, flush)
 
@@ -1557,11 +1601,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             titleRequests.delete(controller)
           }
           reply = applyEvent(reply, event, Date.now(), blockIndexes)
-          if (document.visibilityState === 'hidden') {
-            flush()
-          } else {
-            frame ||= requestAnimationFrame(flush)
-          }
+          scheduleFlush()
         }
         reply = settleReply(reply, 'done', Date.now(), undefined, settings.keepRefusedContent)
 
@@ -1656,6 +1696,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     titleRequests.delete(controller)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
+    if (flushTimer) {
+      window.clearTimeout(flushTimer)
+      flushTimer = 0
+    }
     if (reply.usage) {
       recordTurnTokenUsage(reply.usage)
     }

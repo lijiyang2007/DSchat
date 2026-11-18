@@ -50,8 +50,10 @@ check(
 )
 
 console.log('\nOpenAI 兼容层把字段放进 payload')
-check('payload 带 thinking', /thinking: body\.thinking/.test(openai))
+check('payload 不发 Anthropic 写法 thinking 对象', !/thinking: body\.thinking/.test(openai))
 check('payload 带 reasoning_effort', openai.includes('body.reasoning_effort ? { reasoning_effort: body.reasoning_effort }'))
+check('payload 带 enable_thinking（国产网关写法）', openai.includes('body.enable_thinking !== undefined ? { enable_thinking: body.enable_thinking }'))
+check('OpenAI 层 off 也带 enable_thinking=false', /enable_thinking: effort !== 'off'/.test(store))
 check('Responses payload 带 reasoning', openai.includes('body.reasoning ? { reasoning: body.reasoning }'))
 
 console.log('\n更新推送只推最新一版')

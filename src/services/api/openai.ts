@@ -212,9 +212,11 @@ export async function* streamOpenAIMessage(
     messages: toOpenAIMessages(body, inlineImages, inlineTexts),
     stream: true,
     stream_options: { include_usage: true },
-    // 思考开关与强度：OpenAI 格式用顶层 thinking + reasoning_effort
-    thinking: body.thinking,
+    // 思考开关与强度：reasoning_effort（OpenAI 官方 o 系列）+ enable_thinking（DeepSeek V3.2
+    // 等国产网关），两种写法都带上，各网关取自己认识的字段；
+    // body.thinking 是 DeepSeek 原生（Anthropic 格式）的对象写法，第三方网关不认，不发。
     ...(body.reasoning_effort ? { reasoning_effort: body.reasoning_effort } : {}),
+    ...(body.enable_thinking !== undefined ? { enable_thinking: body.enable_thinking } : {}),
     ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
     ...(body.top_p !== undefined ? { top_p: body.top_p } : {}),
     ...(body.max_tokens !== undefined ? { max_tokens: body.max_tokens } : {}),
