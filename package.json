@@ -1,6 +1,6 @@
 {
   "name": "dschat",
-  "version": "2.7.9",
+  "version": "2.8.1",
   "description": "DSchat — 手机版多模型 AI 对话客户端（基于 DeepSeek 开源前端扩展，已移除语音通话/视频通话/AI 生图）。",
   "license": "MIT",
   "private": true,

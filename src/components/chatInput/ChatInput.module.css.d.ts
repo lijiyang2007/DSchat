@@ -19,6 +19,7 @@ declare const styles: {
   readonly "selected": string;
   readonly "selectedStrong": string;
   readonly "right": string;
+  readonly "sendColumn": string;
   readonly "sendButton": string;
   readonly "disabled": string;
 };

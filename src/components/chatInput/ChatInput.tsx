@@ -298,19 +298,45 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             </Tooltip>
           </div>
           <div className={styles.right}>
-            <VoiceButton
-              status={voice.status}
-              disabled={!voice.available}
-              seconds={voice.seconds}
-              onClick={() => {
-                if (
-                  voice.status !== 'idle' ||
-                  (!useChatStore.getState().importingHistory && ensureApiKey())
-                ) {
-                  void voice.toggle()
-                }
-              }}
-            />
+            {/* 语音按钮放到发送按钮正上方（竖排），不再占用横向空间挡住思考/搜索文字 */}
+            <div className={styles.sendColumn}>
+              <VoiceButton
+                status={voice.status}
+                disabled={!voice.available}
+                seconds={voice.seconds}
+                onClick={() => {
+                  if (
+                    voice.status !== 'idle' ||
+                    (!useChatStore.getState().importingHistory && ensureApiKey())
+                  ) {
+                    void voice.toggle()
+                  }
+                }}
+              />
+              {streaming && sessionId ? (
+                <button
+                  type="button"
+                  className={styles.sendButton}
+                  aria-label={t('chatInputStopButtonTooltip')}
+                  onClick={() => {
+                    stopReadAloud()
+                    stopReply(sessionId)
+                  }}
+                >
+                  <IconStopFill16 />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={clsx(styles.sendButton, !canSend && styles.disabled)}
+                  aria-label={t('send')}
+                  aria-disabled={!canSend}
+                  onClick={send}
+                >
+                  <IconSendOutline16 />
+                </button>
+              )}
+            </div>
             <Tooltip content={t('chatInputMoreActions')}>
               <button
                 type="button"
@@ -361,29 +387,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 setPlusOpen(false)
               }}
             />
-            {streaming && sessionId ? (
-              <button
-                type="button"
-                className={styles.sendButton}
-                aria-label={t('chatInputStopButtonTooltip')}
-                onClick={() => {
-                  stopReadAloud()
-                  stopReply(sessionId)
-                }}
-              >
-                <IconStopFill16 />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={clsx(styles.sendButton, !canSend && styles.disabled)}
-                aria-label={t('send')}
-                aria-disabled={!canSend}
-                onClick={send}
-              >
-                <IconSendOutline16 />
-              </button>
-            )}
           </div>
         </div>
       </div>
