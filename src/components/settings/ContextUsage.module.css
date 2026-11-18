@@ -70,3 +70,35 @@
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* 主动压缩（v2.8.8）：立即压缩 / 清除摘要 */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actionButton {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background-color: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.actionButton:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .actionButton:not(:disabled):hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}

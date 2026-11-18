@@ -414,7 +414,7 @@ const ChatSettings = () => {
   return (
     <>
       <SettingsGroup label={t('settingsContextUsageTitle')}>
-        <ContextUsage />
+        <ContextUsage actions />
       </SettingsGroup>
 
       <SettingsGroup label={t('settingsPersonalizeLabel')}>

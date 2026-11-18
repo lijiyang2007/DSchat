@@ -34,6 +34,7 @@ import {
   estimateHistoryTokens,
   formatCompactionContext,
   planCompaction,
+  planManualCompaction,
   SUMMARY_MAX_CHARS,
   SUMMARY_SYSTEM_PROMPT,
 } from './compaction.js'
@@ -1477,6 +1478,97 @@ const maybeCompactContext = async (
   })()
   compactLocks.set(sessionId, task)
   await task
+}
+
+/**
+ * 主动压缩会话上下文（v2.8.8）：用户点「立即压缩」时调用。
+ *
+ * 与自动压缩的区别：**不看 80% 阈值**，直接按「保留最近 N 轮原文」压缩较早轮次。
+ * 只影响后续请求发送的内容，本地消息一条不删；界面仍可往上翻原文。
+ * 失败时抛错让调用方提示用户（自动压缩失败是静默的，手动要明确告知）。
+ *
+ * @returns 本次压缩掉的轮次数
+ */
+export const compactSession = async (sessionId: string, keepRounds = 3): Promise<number> => {
+  if (get().importingHistory) {
+    throw new Error('history import in progress')
+  }
+  if (getStreamController(sessionId)) {
+    throw new Error('reply in progress')
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    throw new Error('session not loaded')
+  }
+  const running = compactLocks.get(sessionId)
+  if (running) {
+    await running
+    throw new Error('compaction already running')
+  }
+  const settings = useSettings.getState()
+  const history = getVisibleMessages(session)
+  const plan = planManualCompaction({
+    history,
+    compaction: session.compaction,
+    allowRefused: settings.allowRefusedContext,
+    keepRounds,
+  })
+  if (!plan) {
+    throw new Error('nothing to compact')
+  }
+  const controller = new AbortController()
+  const task = (async () => {
+    set((state) => ({ compacting: { ...state.compacting, [sessionId]: true } }))
+    try {
+      const summary = await summarizeRounds({
+        covered: plan.covered,
+        previousSummary: session.compaction?.summary,
+        apiKey: settings.apiKey ?? '',
+        model: settings.model.trim() || MODEL,
+        signal: controller.signal,
+      })
+      updateSession(sessionId, (current) => ({
+        ...current,
+        compaction: {
+          summary,
+          throughMessageId: plan.throughMessageId,
+          tokens: estimateHistoryTokens(history, { summary } as never),
+          compactedAt: Date.now(),
+          count: (current.compaction?.count ?? 0) + 1,
+        },
+      }))
+      persist(sessionId)
+    } finally {
+      compactLocks.delete(sessionId)
+      set((state) => ({
+        compacting: Object.fromEntries(
+          Object.entries(state.compacting).filter(([id]) => id !== sessionId)
+        ),
+      }))
+    }
+  })()
+  // 锁只用于串行化，不向外传结果（类型是 Promise<void>）
+  compactLocks.set(sessionId, task)
+  await task
+  return plan.covered.length
+}
+
+/**
+ * 清除会话的压缩摘要（v2.8.8）：恢复成发送完整原文。
+ * 上下文很长时可能立刻触发自动压缩，也可能被服务端按超限拒绝——由用户自己决定。
+ */
+export const clearSessionCompaction = (sessionId: string): boolean => {
+  const session = getSession(sessionId)
+  if (!session?.compaction) {
+    return false
+  }
+  updateSession(sessionId, (current) => {
+    const next = { ...current }
+    delete next.compaction
+    return next
+  })
+  persist(sessionId)
+  return true
 }
 
 /**

@@ -185,8 +185,77 @@ export const planCompaction = ({
   return { covered, kept, throughMessageId: lastCovered.id }
 }
 
-/** 把待压缩轮次拼成给总结模型的输入 */
-export const buildSummaryPrompt = (
+/**
+ * 手动（主动）压缩的计划（v2.8.8）。
+ *
+ * 和自动压缩的区别：**不看是否到 80% 阈值**，由用户点「立即压缩」触发。
+ * 语义是「把较早的轮次压成摘要，只保留最近 keepRounds 轮原文」。
+ *
+ * @param keepRounds 保留最近多少轮原文；至少 MIN_KEEP_ROUNDS 轮
+ * @returns 没有可压缩的内容时返回 null（轮次太少 / 已经全压过了）
+ */
+export const planManualCompaction = ({
+  history,
+  compaction,
+  allowRefused,
+  keepRounds = 3,
+}: {
+  history: Message[]
+  compaction: Compaction | undefined
+  allowRefused: boolean
+  keepRounds?: number
+}): CompactionPlan | null => {
+  const rounds = getContextRounds(history, allowRefused)
+  // 已经压过的轮次不再进 covered：throughMessageId 记的是被覆盖的最后一条「回答」
+  const compactedThrough = compaction?.throughMessageId
+  const cutIndex = compactedThrough
+    ? rounds.findIndex(([, reply]) => reply.id === compactedThrough) + 1
+    : 0
+  const pending = rounds.slice(Math.max(0, cutIndex))
+  const keep = Math.max(MIN_KEEP_ROUNDS, keepRounds)
+  // 至少要能压掉 1 轮，否则没有意义
+  if (pending.length <= keep) {
+    return null
+  }
+  const splitAt = pending.length - keep
+  const covered = pending.slice(0, splitAt)
+  const kept = pending.slice(splitAt)
+  const lastCovered = covered.at(-1)?.[1]
+  if (!lastCovered) {
+    return null
+  }
+  return { covered, kept, throughMessageId: lastCovered.id }
+}
+
+/**
+ * 手动压缩可用的轮次统计，用于界面提示「可压缩 N 轮」。
+ */
+export const manualCompactionStats = ({
+  history,
+  compaction,
+  allowRefused,
+  keepRounds = 3,
+}: {
+  history: Message[]
+  compaction: Compaction | undefined
+  allowRefused: boolean
+  keepRounds?: number
+}): { total: number; compactable: number; keep: number } => {
+  const rounds = getContextRounds(history, allowRefused)
+  const compactedThrough = compaction?.throughMessageId
+  const cutIndex = compactedThrough
+    ? rounds.findIndex(([, reply]) => reply.id === compactedThrough) + 1
+    : 0
+  const pending = rounds.slice(Math.max(0, cutIndex))
+  const keep = Math.max(MIN_KEEP_ROUNDS, keepRounds)
+  return {
+    total: rounds.length,
+    compactable: Math.max(0, pending.length - keep),
+    keep: Math.min(keep, pending.length),
+  }
+}
+
+/** 把待压缩轮次拼成给总结模型的输入 */export const buildSummaryPrompt = (
   covered: [UserMessage, AssistantMessage][],
   previousSummary: string | undefined
 ): string => {

@@ -71,7 +71,11 @@ check('抽成独立组件', usage.includes('export const ContextUsage'))
 check('支持指定会话 id', /sessionId\?/.test(usage) && /targetId = sessionId \?\? activeId/.test(usage))
 check('用服务端真实 usage', usage.includes('contextUsageDetail'))
 check('弹窗从菜单打开', /setUsageOpen\(true\)/.test(item) && item.includes('ContextUsage sessionId={session.id}'))
-check('设置页复用同一组件', read('src/components/settings/SettingsDialog.tsx').includes('<ContextUsage />'))
+check(
+  '设置页复用同一组件',
+  // v2.8.8 起设置页传 actions 以显示「立即压缩 / 清除摘要」按钮
+  /<ContextUsage(\s+actions)?\s*\/>/.test(read('src/components/settings/SettingsDialog.tsx'))
+)
 check('样式独立成文件', read('src/components/settings/ContextUsage.module.css').includes('.fill_high'))
 
 console.log('\n五、更新：不再重复下载')
