@@ -12,7 +12,7 @@ import {
   compactSession,
   useChatStore,
 } from '../../services/chat/store.js'
-import { useSettings } from '../../services/settings.js'
+import { activeContextWindow, useSettings } from '../../services/settings.js'
 import { showToast } from '../base/toastState.js'
 import styles from './ContextUsage.module.css'
 
@@ -51,7 +51,8 @@ export const ContextUsage = ({
       : undefined
   )
   const model = useSettings((state) => state.model)
-  const contextWindow = useSettings((state) => state.contextWindow)
+  // v2.9.2：窗口跟着当前模型走，和压缩判定的取值保持一致
+  const contextWindow = useSettings(activeContextWindow)
   const autoCompact = useSettings((state) => state.autoCompactContext)
   const allowRefused = useSettings((state) => state.allowRefusedContext)
   const compactLevel = useSettings((state) => state.compactLevel)

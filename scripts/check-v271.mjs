@@ -45,8 +45,9 @@ check('合成统一事件流 emitUnified（备查）', fetchOnce.includes('emitU
 check('合成流以 message_stop 结束（备查）', /emitUnified[\s\S]+message_stop/.test(fetchOnce))
 
 console.log('\n二、官方账号锁定与能力拉满')
-check('官方条目不再渲染编辑按钮', !/provider\.builtin \? \(\s*<Button/.test(providerList) && providerList.includes('providerOfficialLocked'))
-check('openProviderEditor 拦截官方条目', /openProviderEditor[\s\S]{0,300}builtin[\s\S]{0,200}showToast/.test(dialogState))
+// v2.9.2：官方条目也开放编辑（页面里只留「思考强度」），不再显示「登录后自动可用」占位
+check('官方条目也渲染编辑按钮', /provider\.builtin \? \([\s\S]{0,240}<Button/.test(providerList) || !providerList.includes('providerOfficialLocked'))
+check('openProviderEditor 不再拦截官方条目', !/provider\?\.builtin[\s\S]{0,200}providerOfficialLockedToast/.test(dialogState))
 check('官方 flash maxTokens 65536', providers.includes('maxTokens: 65536'))
 check('官方 flash 上下文 1M', providers.includes('contextWindow: 1_000_000'))
 check('官方 flash 可看图', providers.includes("inputs: { text: true, image: true }"))
@@ -86,7 +87,7 @@ check('新增 i18n 键齐全', ['providerOfficialLocked', 'providerOfficialLocke
 console.log('\n六、思考关闭与官方自愈（2.7.4/2.7.5）')
 check('off 档也发协议字段（enable_thinking:false）', /buildReasoningPayload\(effort, settings\.chatProtocol\)/.test(store) && !/\?\s*buildReasoningPayload/.test(store))
 check('openai 协议 off 带 enable_thinking:false', /enable_thinking: effort !== 'off'/.test(store))
-check('官方条目启动时自愈', /createOfficialProvider\(\), apiKey: item\.apiKey/.test(read('src/services/settings.ts')))
+check('官方条目启动时自愈（v2.9.2 起走 repairOfficialProvider）', /repairOfficialProvider\(item\)/.test(read('src/services/settings.ts')))
 check('官方条目切换时自愈', /setActiveProvider[\s\S]{0,900}dirty[\s\S]{0,400}repaired/.test(read('src/services/settings.ts')))
 check('anthropic-beta 按文件引用携带', /fetchAnthropicMessage[\s\S]{0,200}hasFileRef/.test(read('src/services/api/fetchOnce.ts')))
 // 2.7.7 真流式：streamMessage 自己按 body 内容判定是否带 files beta，

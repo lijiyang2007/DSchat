@@ -3,12 +3,15 @@ import { setRuntimeApiOrigin } from './api/origin.js'
 import type { TtsVoice } from './api/speech.js'
 import {
   DEFAULT_COMPACT_LEVEL,
+  getContextWindow,
   isCompactLevel,
   type CompactLevel,
 } from './chat/compaction.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 import {
+  activeModelOf,
   createOfficialProvider,
+  DEFAULT_THINKING_EFFORT,
   newProviderId,
   type Provider,
 } from './providers.js'
@@ -356,8 +359,11 @@ const initialProviders = (): Provider[] => {
         const list = hasOfficial ? parsed : [createOfficialProvider(), ...parsed]
         // 官方条目配置自愈（2.7.4）：v2.7.1 前允许编辑官方条目，部分设备上
         // 它被改成了第三方协议/地址——切回官方就 404。锁死后用内置值修复脏配置。
+        //
+        // v2.9.2：官方条目开放了「思考强度」编辑（只此一项），这一项必须保留用户的选择，
+        // 否则用户刚改完一重启又回 off。地址/协议/请求头/模型目录仍强制回内置值。
         return list.map((item) =>
-          item.id === 'deepseek-official' ? { ...createOfficialProvider(), apiKey: item.apiKey } : item
+          item.id === 'deepseek-official' ? repairOfficialProvider(item) : item
         )
       }
     } catch {
@@ -395,6 +401,7 @@ const initialProviders = (): Provider[] => {
         ? [{ id: legacyModel, name: '', inputs: { text: true, image: true } }]
         : [],
       model: legacyModel,
+      thinkingEffort: DEFAULT_THINKING_EFFORT,
     },
   ]
 }
@@ -407,6 +414,16 @@ const hostLabel = (url: string): string => {
     return url.replace(/^https?:\/\//i, '').split('/')[0] || url
   }
 }
+
+/**
+ * 官方条目的自愈：地址/协议/请求头/模型目录一律回内置值（防 404、防 pro 被勾成可看图），
+ * 但**保留用户能编辑的部分**——API Key 与思考强度（v2.9.2 官方只开放思考强度）。
+ */
+const repairOfficialProvider = (saved: Provider): Provider => ({
+  ...createOfficialProvider(),
+  apiKey: saved.apiKey ?? '',
+  thinkingEffort: saved.thinkingEffort ?? DEFAULT_THINKING_EFFORT,
+})
 
 const initialProvidersCache = initialProviders()
 
@@ -450,6 +467,39 @@ const initialActiveProviderId = (): string => {
 /** 当前生效的供应商 */
 export const activeProvider = (state: Settings = useSettings.getState()): Provider =>
   state.providers.find((item) => item.id === state.activeProviderId) ?? state.providers[0]
+
+/**
+ * 当前供应商的思考强度（v2.9.2）。
+ *
+ * 以前只有一个全局 `thinkingEffort`，第三方供应商没有入口可改，
+ * 表现出来就是「第三方调不了思考强度」。现在强度跟着供应商走：
+ * 每条供应商自己存一份，默认 off（用户明确要求官方与第三方都默认 off）。
+ */
+export const providerThinkingEffort = (state: Settings = useSettings.getState()): ThinkingEffort =>
+  activeProvider(state).thinkingEffort ?? DEFAULT_THINKING_EFFORT
+
+/**
+ * 当前模型实际生效的上下文窗口（v2.9.2）。
+ *
+ * 取值优先级：
+ * 1. 模型目录里填的 `contextWindow`（官方 flash 1M / pro 256K，第三方在编辑页里填）；
+ * 2. 没填时按模型名推断（`getContextWindow`，deepseek 128K / gpt-4o 128K / 未知 64K）；
+ * 3. 最后才退回全局值 `state.contextWindow`。
+ *
+ * 为什么不再直接用全局值：全局默认是 100 万，第三方模型（常见 32K~128K）
+ * 永远算不到触发阈值——这就是用户反馈「开了自动压缩却从没见它压过」的原因。
+ * 注意：**第三个模型目录已经不可编辑了**（官方只开放思考强度），
+ * 所以这条链路对官方走的是内置值，对第三方走的是编辑页里填的值。
+ */
+export const activeContextWindow = (state: Settings = useSettings.getState()): number => {
+  const provider = activeProvider(state)
+  const model = activeModelOf(provider)
+  const own = model?.contextWindow
+  if (own && Number.isFinite(own) && own >= 4000) {
+    return own
+  }
+  return getContextWindow(model?.id ?? state.model, state.contextWindow)
+}
 
 export const useSettings = create<Settings>(() => ({
   apiKey: initialProvidersCache.find((item) => item.id === initialActiveProviderId())?.apiKey || null,
@@ -555,6 +605,11 @@ const commitProviders = (providers: Provider[], activeId: string) => {
   write(KEYS.apiOrigin, active.baseUrl || null)
   write(KEYS.chatProtocol, active.protocol)
   write(KEYS.customHeaders, active.headers || null)
+  // 思考强度也跟着供应商走（v2.9.2）：切供应商时同步全局镜像值，
+  // 请求组装读的是这个镜像值（settings.thinkingEffort）。
+  const effort = active.thinkingEffort ?? DEFAULT_THINKING_EFFORT
+  write(KEYS.thinkingEffort, effort)
+  write(KEYS.thinking, String(effort !== 'off'))
   setRuntimeApiOrigin(active.baseUrl)
   useSettings.setState({
     providers,
@@ -564,6 +619,8 @@ const commitProviders = (providers: Provider[], activeId: string) => {
     apiOrigin: active.baseUrl,
     chatProtocol: active.protocol,
     customHeaders: active.headers,
+    thinkingEffort: effort,
+    thinking: effort !== 'off',
   })
 }
 
@@ -575,9 +632,7 @@ export const setActiveProvider = (id: string) => {
   }
   // 官方条目运行时自愈：升级前被改坏的配置在切换瞬间修复并落盘（2.7.4）
   const official = providers.find((item) => item.id === 'deepseek-official')
-  const repaired = official
-    ? { ...createOfficialProvider(), apiKey: official.apiKey }
-    : undefined
+  const repaired = official ? repairOfficialProvider(official) : undefined
   const dirty =
     official !== undefined &&
     repaired !== undefined &&
@@ -603,6 +658,8 @@ export const addProvider = (seed?: Partial<Provider>): string => {
     baseUrl: seed?.baseUrl ?? '',
     apiKey: seed?.apiKey ?? '',
     headers: seed?.headers ?? '',
+    // 新供应商默认关闭思考（与官方一致）
+    thinkingEffort: DEFAULT_THINKING_EFFORT,
     models: seed?.models ?? [],
     model: seed?.model ?? '',
   }
@@ -655,11 +712,24 @@ export const setThinking = (thinking: boolean) => {
   useSettings.setState({ thinking })
 }
 
+/**
+ * 设置思考强度（v2.9.2：写到**当前供应商**上，不再是一个全局值）。
+ *
+ * 官方与第三方共用这一个入口：第三方供应商在编辑页里也能改，
+ * 以前只有设置页一个全局下拉，第三方模型实际调不了强度。
+ */
 export const setThinkingEffort = (thinkingEffort: ThinkingEffort) => {
   write(KEYS.thinkingEffort, thinkingEffort)
   // 同步旧开关，让界面上的「深度思考」按钮状态一致
   write(KEYS.thinking, String(thinkingEffort !== 'off'))
   useSettings.setState({ thinkingEffort, thinking: thinkingEffort !== 'off' })
+  // 落盘到当前供应商，切走再切回来强度不丢
+  const { providers, activeProviderId } = useSettings.getState()
+  const next = providers.map((item) =>
+    item.id === activeProviderId ? { ...item, thinkingEffort, id: item.id } : item
+  )
+  write(KEYS.providers, JSON.stringify(next))
+  useSettings.setState({ providers: next })
 }
 
 export const setContextWindow = (value: number) => {

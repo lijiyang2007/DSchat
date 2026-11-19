@@ -4,11 +4,14 @@ import { useTranslate } from '../../i18n/index.js'
 import {
   CONTEXT_WINDOW_PRESETS,
   setChatProtocol,
+  setThinkingEffort,
   updateProvider,
   useSettings,
   type ChatProtocol,
+  type ThinkingEffort,
 } from '../../services/settings.js'
 import {
+  DEFAULT_THINKING_EFFORT,
   emptyModel,
   formatTokenSize,
   parseTokenSize,
@@ -20,6 +23,51 @@ import { Button } from '../base/Button.js'
 import { Select, type SelectOption } from '../base/Select.js'
 import { ModelFetcherInput } from './ChannelConfigField.js'
 import styles from './ProviderEditor.module.css'
+
+/**
+ * 折叠区块（v2.9.2）。
+ *
+ * 参照用户给的截图：编辑页拆成「自定义设置 / 思考强度 / 模型目录」几个可折叠入口，
+ * 默认收起，点标题展开——一屏就能看到全貌，不用一直往下滚。
+ * 官方与第三方共用这套布局，官方只渲染「思考强度」一项。
+ */
+const Section = ({
+  title,
+  hint,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  hint?: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) => (
+  <div className={styles.block}>
+    <button
+      type="button"
+      className={styles.disclosure}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <span className={clsx(styles.disclosureIcon, open && styles.disclosureIconOpen)}>
+        <IconChevronDownOutline14 />
+      </span>
+      {title}
+    </button>
+    {hint ? <div className={styles.fieldHint}>{hint}</div> : null}
+    {open ? <div className={styles.customBody}>{children}</div> : null}
+  </div>
+)
+
+/** 思考强度四档：官方与第三方共用 */
+const THINKING_OPTIONS = [
+  ['off', 'thinkingEffortOff'],
+  ['low', 'thinkingEffortLow'],
+  ['high', 'thinkingEffortHigh'],
+  ['max', 'thinkingEffortMax'],
+] as const
 
 /** 单行模型：id + 显示名一行，展开后是上下文窗口 / 最大输出 / 输入类型 */
 const ModelRow = ({
@@ -158,6 +206,12 @@ const ModelRow = ({
  * 供应商编辑页。
  * 编辑期间改的是本地草稿，点「保存」才写回；点「取消」直接丢弃，
  * 不会把没保存的 Key / 地址留在配置里。
+ *
+ * v2.9.2：
+ * - 拆成「自定义设置 / 思考强度 / 模型目录」三个折叠入口（参照截图布局）。
+ * - **官方条目也能进来**，但页面里只有「思考强度」一项——地址/协议/请求头/模型目录
+ *   全部由内置值决定（save() 对 builtin 只写 thinkingEffort，自愈也会重建其余字段），
+ *   这样官方既改不坏，用户又能给官方单独调强度。
  */
 export const ProviderEditor = ({
   provider,
@@ -171,14 +225,17 @@ export const ProviderEditor = ({
   const t = useTranslate()
   const activeProviderId = useSettings((state) => state.activeProviderId)
   const [draft, setDraft] = useState<Provider>(provider)
-  const [customOpen, setCustomOpen] = useState(
-    Boolean(provider.baseUrl || provider.headers) || !provider.builtin
-  )
+  // 默认都收起：一屏看完「自定义设置 / 思考强度 / 模型目录」三个入口
+  const [customOpen, setCustomOpen] = useState(false)
+  const [thinkingOpen, setThinkingOpen] = useState(false)
+  const [modelsOpen, setModelsOpen] = useState(false)
 
-  // 切到另一个供应商时重置草稿
+  // 切到另一个供应商时重置草稿与折叠状态
   useEffect(() => {
     setDraft(provider)
-    setCustomOpen(Boolean(provider.baseUrl || provider.headers) || !provider.builtin)
+    setCustomOpen(false)
+    setThinkingOpen(false)
+    setModelsOpen(false)
   }, [provider])
 
   const protocolOptions: SelectOption<ChatProtocol>[] = [
@@ -200,10 +257,24 @@ export const ProviderEditor = ({
 
   const save = () => {
     const name = draft.name.trim() || (draft.baseUrl ? hostOf(draft.baseUrl) : t('providerUntitled'))
+    if (draft.builtin) {
+      // 官方条目只写思考强度一项：地址/协议/请求头/模型目录全部由内置值决定，
+      // 界面里也不给这些入口，用户不可能把官方配置改坏。
+      updateProvider(draft.id, {
+        thinkingEffort: draft.thinkingEffort ?? DEFAULT_THINKING_EFFORT,
+      })
+      // 正在用的就是官方时，全局镜像值要同步，否则改完强度请求里还是旧值
+      if (draft.id === activeProviderId) {
+        setThinkingEffort(draft.thinkingEffort ?? DEFAULT_THINKING_EFFORT)
+      }
+      onSaved()
+      return
+    }
     updateProvider(draft.id, { ...draft, name })
-    // 正在用的供应商要同步全局协议，否则请求仍走旧协议
+    // 正在用的供应商要同步全局协议与思考强度，否则请求仍走旧配置
     if (draft.id === activeProviderId) {
       setChatProtocol(draft.protocol)
+      setThinkingEffort(draft.thinkingEffort ?? DEFAULT_THINKING_EFFORT)
     }
     onSaved()
   }
@@ -227,138 +298,161 @@ export const ProviderEditor = ({
         )}
       </div>
 
-      {/* API 密钥 */}
-      <div className={styles.block}>
-        <div className={styles.blockLabel}>
-          {t('providerApiKeyLabel')}
-          <span className={styles.help} title={t('providerApiKeyHelp')}>
-            ?
-          </span>
+      {/* API 密钥（官方走账号登录，不需要也不显示 Key 入口） */}
+      {draft.builtin ? (
+        <div className={styles.block}>
+          <div className={styles.fieldHint}>{t('providerOfficialBaseUrlHint')}</div>
         </div>
-        <input
-          type="password"
-          className={styles.input}
-          placeholder={t('providerApiKeyPlaceholder')}
-          autoComplete="off"
-          spellCheck={false}
-          value={draft.apiKey}
-          onChange={(event) => patch({ apiKey: event.target.value })}
-        />
-        {draft.builtin && !draft.apiKey ? (
-          <div className={styles.warn}>{t('providerApiKeyMissing')}</div>
-        ) : null}
-      </div>
-
-      {/* 自定义设置 */}
-      <div className={styles.block}>
-        <button
-          type="button"
-          className={styles.disclosure}
-          aria-expanded={customOpen}
-          onClick={() => setCustomOpen((value) => !value)}
-        >
-          <span className={clsx(styles.disclosureIcon, customOpen && styles.disclosureIconOpen)}>
-            <IconChevronDownOutline14 />
-          </span>
-          {t('providerCustomSettings')}
-        </button>
-
-        {customOpen ? (
-          <div className={styles.customBody}>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>{t('providerBaseUrlLabel')}</span>
-              <input
-                className={styles.input}
-                placeholder={t('providerBaseUrlPlaceholder')}
-                spellCheck={false}
-                value={draft.baseUrl}
-                onChange={(event) => patch({ baseUrl: event.target.value })}
-              />
-              <span className={styles.fieldHint}>{t('providerBaseUrlHint')}</span>
-            </label>
-
-            <div className={styles.field}>
-              <span className={styles.fieldLabel}>{t('chatProtocolLabel')}</span>
-              <Select
-                value={draft.protocol}
-                options={protocolOptions}
-                ariaLabel={t('chatProtocolLabel')}
-                onChange={(value) => patch({ protocol: value })}
-              />
-            </div>
-
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>{t('providerHeadersLabel')}</span>
-              <textarea
-                className={styles.textarea}
-                placeholder={'x-foo: bar'}
-                spellCheck={false}
-                value={draft.headers}
-                onChange={(event) => patch({ headers: event.target.value })}
-              />
-              <span className={styles.fieldHint}>{t('providerHeadersHint')}</span>
-            </label>
+      ) : (
+        <div className={styles.block}>
+          <div className={styles.blockLabel}>
+            {t('providerApiKeyLabel')}
+            <span className={styles.help} title={t('providerApiKeyHelp')}>
+              ?
+            </span>
           </div>
-        ) : null}
-      </div>
-
-      {/* 模型目录 */}
-      <div className={styles.block}>
-        <div className={styles.blockHead}>
-          <span className={styles.blockLabel}>{t('providerModelCatalog')}</span>
-          {draft.models.length > 0 ? (
-            <button
-              type="button"
-              className={styles.linkAction}
-              onClick={() => patch({ models: [], model: '' })}
-            >
-              {t('providerResetModels')}
-            </button>
-          ) : null}
-        </div>
-
-        {draft.models.length === 0 ? (
-          <div className={styles.empty}>{t('providerNoModelYet')}</div>
-        ) : (
-          <div className={styles.modelList}>
-            {draft.models.map((model, index) => (
-              <ModelRow
-                key={`${index}-${model.id}`}
-                model={model}
-                onChange={(next) =>
-                  setModels(draft.models.map((item, i) => (i === index ? next : item)))
-                }
-                onRemove={() => setModels(draft.models.filter((_, i) => i !== index))}
-              />
-            ))}
-          </div>
-        )}
-
-        <button
-          type="button"
-          className={styles.addModel}
-          onClick={() => patch({ models: [...draft.models, emptyModel()] })}
-        >
-          {t('providerAddModel')}
-        </button>
-
-        <div className={styles.fetchRow}>
-          <ModelFetcherInput
-            value={draft.model}
-            baseUrl={draft.baseUrl}
-            apiKey={draft.apiKey}
-            customHeaders={draft.headers}
-            placeholder={t('providerModelIdPlaceholder')}
-            onChange={(modelId) => {
-              const exists = draft.models.some((item) => item.id === modelId)
-              const models = exists
-                ? draft.models
-                : [...draft.models, { ...emptyModel(), id: modelId }]
-              patch({ models, model: modelId })
-            }}
+          <input
+            type="password"
+            className={styles.input}
+            placeholder={t('providerApiKeyPlaceholderCustom')}
+            autoComplete="off"
+            spellCheck={false}
+            value={draft.apiKey}
+            onChange={(event) => patch({ apiKey: event.target.value })}
           />
         </div>
-      </div>
+      )}
+
+      {/* 自定义设置：地址 / 协议 / 请求头（官方隐藏，由内置值决定） */}
+      {draft.builtin ? null : (
+        <Section
+          title={t('providerCustomSettings')}
+          open={customOpen}
+          onToggle={() => setCustomOpen((value) => !value)}
+        >
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>{t('providerBaseUrlLabel')}</span>
+            <input
+              className={styles.input}
+              placeholder={t('providerBaseUrlPlaceholder')}
+              spellCheck={false}
+              value={draft.baseUrl}
+              onChange={(event) => patch({ baseUrl: event.target.value })}
+            />
+            <span className={styles.fieldHint}>{t('providerBaseUrlHint')}</span>
+          </label>
+
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>{t('chatProtocolLabel')}</span>
+            <Select
+              value={draft.protocol}
+              options={protocolOptions}
+              ariaLabel={t('chatProtocolLabel')}
+              onChange={(value) => patch({ protocol: value })}
+            />
+          </div>
+
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>{t('providerHeadersLabel')}</span>
+            <textarea
+              className={styles.textarea}
+              placeholder={'x-foo: bar'}
+              spellCheck={false}
+              value={draft.headers}
+              onChange={(event) => patch({ headers: event.target.value })}
+            />
+            <span className={styles.fieldHint}>{t('providerHeadersHint')}</span>
+          </label>
+        </Section>
+      )}
+
+      {/*
+        思考强度：官方与第三方共用。
+        v2.9.2 以前只有一个全局值、也没有入口，第三方实际调不了强度；
+        现在按供应商保存，官方也能单独设（用户明确要求官方只开放这一项）。
+      */}
+      <Section
+        title={t('providerThinkingEffort')}
+        hint={t('providerThinkingEffortHint')}
+        open={thinkingOpen}
+        onToggle={() => setThinkingOpen((value) => !value)}
+      >
+        <div className={styles.field}>
+          <Select
+            value={draft.thinkingEffort ?? DEFAULT_THINKING_EFFORT}
+            options={THINKING_OPTIONS.map(([value, key]) => ({
+              value,
+              label: t(key as never),
+            }))}
+            ariaLabel={t('providerThinkingEffort')}
+            onChange={(value) => patch({ thinkingEffort: value as ThinkingEffort })}
+          />
+        </div>
+      </Section>
+
+      {/* 模型目录（官方隐藏：模型与参数由内置值决定，save() 也不会写它们） */}
+      {draft.builtin ? null : (
+        <Section
+          title={t('providerModelCatalog')}
+          open={modelsOpen}
+          onToggle={() => setModelsOpen((value) => !value)}
+        >
+          <div className={styles.blockHead}>
+            <span className={styles.fieldHint}>{t('providerModelCatalogHint')}</span>
+            {draft.models.length > 0 ? (
+              <button
+                type="button"
+                className={styles.linkAction}
+                onClick={() => patch({ models: [], model: '' })}
+              >
+                {t('providerResetModels')}
+              </button>
+            ) : null}
+          </div>
+
+          {draft.models.length === 0 ? (
+            <div className={styles.empty}>{t('providerNoModelYet')}</div>
+          ) : (
+            <div className={styles.modelList}>
+              {draft.models.map((model, index) => (
+                <ModelRow
+                  key={`${index}-${model.id}`}
+                  model={model}
+                  onChange={(next) =>
+                    setModels(draft.models.map((item, i) => (i === index ? next : item)))
+                  }
+                  onRemove={() => setModels(draft.models.filter((_, i) => i !== index))}
+                />
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            className={styles.addModel}
+            onClick={() => patch({ models: [...draft.models, emptyModel()] })}
+          >
+            {t('providerAddModel')}
+          </button>
+
+          <div className={styles.fetchRow}>
+            <ModelFetcherInput
+              value={draft.model}
+              baseUrl={draft.baseUrl}
+              apiKey={draft.apiKey}
+              customHeaders={draft.headers}
+              placeholder={t('providerModelIdPlaceholder')}
+              onChange={(modelId) => {
+                const exists = draft.models.some((item) => item.id === modelId)
+                const models = exists
+                  ? draft.models
+                  : [...draft.models, { ...emptyModel(), id: modelId }]
+                patch({ models, model: modelId })
+              }}
+            />
+          </div>
+        </Section>
+      )}
 
       <div className={styles.footer}>
         <Button variant="outlined" size="m" onClick={onCancel}>

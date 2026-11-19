@@ -18,7 +18,8 @@ import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isImageRejectedError, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { normalizeImageIfNeeded, markImageRejected } from '../imageNormalize.js'
-import { allowsVision, matchesRefusalKeyword, useSettings } from '../settings.js'
+import { activeContextWindow, activeProvider, matchesRefusalKeyword, useSettings } from '../settings.js'
+import { modelSupportsImage } from '../providers.js'
 import { toggleReadAloud } from '../speech/readAloud.js'
 import { recordTurnTokenUsage } from '../tokenUsage.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
@@ -1296,11 +1297,9 @@ const prepareInlineAttachments = async (
       // 失败时退回原件；base64 内联路径必须走这里，避免 48MiB 请求体与 8192px 限制报错。
       const normalized = await normalizeImageIfNeeded(blob, file.mimeType, file.id)
       const dataUrl = await blobToDataUrl(normalized.blob)
-      const modelSeesImages = allowsVision(
-        settings.visionSupport,
-        settings.model,
-        settings.chatProtocol
-      )
+      // v2.9.2：识图能力改由「模型目录里的输入类型」决定（设置页的识图下拉已删除），
+      // 用户能不能发图给这个模型，在供应商编辑页里给每个模型勾「图片」即可。
+      const modelSeesImages = modelSupportsImage(activeProvider(settings))
       if (!modelSeesImages && isCurrentQuestionFile) {
         // 模型不支持看图时，仍用同一模型尝试转成文字描述，避免直接发图报错
         const desc = await recognizeWithOpenAIVision({
@@ -1448,7 +1447,8 @@ const maybeCompactContext = async (
               compaction: session.compaction,
               model,
               allowRefused: settings.allowRefusedContext,
-              contextWindow: settings.contextWindow,
+              // v2.9.2：窗口跟着当前模型走（以前是全局值，第三方模型永远算不到阈值）
+              contextWindow: activeContextWindow(settings),
               triggerRatio: levelMeta.ratio,
               keepRounds: levelMeta.keepRounds,
             })

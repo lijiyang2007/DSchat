@@ -63,21 +63,18 @@ export const ProviderList = ({ onEdit }: { onEdit: (id: string) => void }) => {
               </div>
             </div>
             <div className={styles.actions}>
-              {/* 官方条目不开放编辑：登录账号即自动可用，模型能力由客户端内置 */}
-              {provider.builtin ? (
-                <span className={styles.metaText}>{t('providerOfficialLocked')}</span>
-              ) : (
-                <Button
-                  variant="outlined"
-                  size="s"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onEdit(provider.id)
-                  }}
-                >
-                  {t('providerEdit')}
-                </Button>
-              )}
+              {/* v2.9.2：官方条目也开放编辑——进去只能改「思考强度」，
+                  地址/协议/模型目录仍由内置值决定，不会被编辑改坏 */}
+              <Button
+                variant="outlined"
+                size="s"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onEdit(provider.id)
+                }}
+              >
+                {t('providerEdit')}
+              </Button>
               {provider.custom ? (
                 <button
                   type="button"

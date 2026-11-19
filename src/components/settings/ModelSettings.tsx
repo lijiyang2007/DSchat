@@ -1,22 +1,15 @@
-import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { getApiOrigin } from '../../services/api/origin.js'
 import { setSpeechApiKey, speechApiKey } from '../../services/api/speech.js'
 import {
-  allowsVision,
-  CONTEXT_WINDOW_PRESETS,
-  DEFAULT_MODEL,
   DEFAULT_SYSTEM_PROMPT,
   resetModelAndPolicySettings,
   setAllowEditAssistant,
   setAllowRefusedContext,
   setApiKey,
   setApiOrigin,
-  setAutoCompactContext,
   setAutoTitle,
   setChatProtocol,
-  setContextWindow,
   setCustomHeaders,
   setKeepRefusedContent,
   setMaxTokens,
@@ -28,36 +21,16 @@ import {
   setRefusalMessage,
   setSafetyCheck,
   setSendLatestReminder,
-  setShowTokenUsage,
-  setStreamThrottle,
   setSystemPrompt,
-  setThinkingEffort,
-  setVisionSupport,
   setTemperature,
   setTopP,
   useSettings,
   type ChatProtocol,
-  type StreamThrottle,
-  type ThinkingEffort,
-  type VisionSupport,
 } from '../../services/settings.js'
 import { Button } from '../base/Button.js'
-import { Select, type SelectOption } from '../base/Select.js'
-import { ModelFetcherInput } from './ChannelConfigField.js'
-import {
-  openProviderEditor,
-  useSettingsDialog,
-} from './settingsDialogState.js'
+import { openProviderEditor } from './settingsDialogState.js'
 import { ProviderList } from './ProviderList.js'
 import styles from './Settings.module.css'
-
-/** 上下文窗口的人类可读形式：128000 -> 128K，1000000 -> 1M */
-const formatWindow = (tokens: number): string => {
-  if (tokens >= 1_000_000) {
-    return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
-  }
-  return `${Math.round(tokens / 1000)}K`
-}
 
 /**
  * 语音 API Key 输入框。
@@ -123,36 +96,6 @@ const SpeechKeyCell = () => {
     </div>
   )
 }
-
-type Translate = (key: never, params?: Record<string, string | number>) => string
-
-const thinkingEffortOptions = (t: Translate) =>
-  (
-    [
-      ['off', 'thinkingEffortOff'],
-      ['low', 'thinkingEffortLow'],
-      ['high', 'thinkingEffortHigh'],
-      ['max', 'thinkingEffortMax'],
-    ] as const
-  ).map(([value, key]) => ({ value, label: t(key as never) }))
-
-const streamThrottleOptions = (t: Translate) =>
-  (
-    [
-      ['smooth', 'streamThrottleSmooth'],
-      ['balanced', 'streamThrottleBalanced'],
-      ['full', 'streamThrottleFull'],
-    ] as const
-  ).map(([value, key]) => ({ value, label: t(key as never) }))
-
-const visionOptions = (t: Translate) =>
-  (
-    [
-      ['auto', 'visionSupportAuto'],
-      ['yes', 'visionSupportYes'],
-      ['no', 'visionSupportNo'],
-    ] as const
-  ).map(([value, key]) => ({ value, label: t(key as never) }))
 
 export const ToggleSwitch = ({
   checked,
@@ -350,31 +293,20 @@ const applyConfigSnippet = (raw: string): boolean => {
   return true
 }
 
-const LOCAL_PRESETS = [
-  { label: 'Ollama (:11434)', url: 'http://127.0.0.1:11434/v1' },
-  { label: 'LM Studio (:1234)', url: 'http://127.0.0.1:1234/v1' },
-  { label: 'vLLM (:8000)', url: 'http://127.0.0.1:8000/v1' },
-  { label: 'LocalAI (:8080)', url: 'http://127.0.0.1:8080/v1' },
-] as const
-
-/** 模型与接口设置：供应商列表、请求参数、多能力渠道及回复/拒答策略 */
+/**
+ * 模型与接口设置。
+ *
+ * v2.9.2：上一版把「协议 / API 地址 / 模型 / 上下文窗口 / 思考强度 / 图片识别能力 /
+ * 流式输出档位 / 上下文自动压缩」8 项都塞了进来。这些都跟着具体供应商/模型走，
+ * 放在全局页里既会串（换供应商不跟着变），第三方也没法单独配。
+ * 现在它们全部挪进**供应商编辑页**（或对话设置），这里只留与供应商无关的公共项。
+ */
 export const ModelSettings = () => {
   const t = useTranslate()
   const settings = useSettings()
   const [snippetOpen, setSnippetOpen] = useState(false)
   const [snippetText, setSnippetText] = useState('')
   const [snippetStatus, setSnippetStatus] = useState<{ text: string; error?: boolean } | null>(null)
-  // 编辑跳到独立子页（SettingsDialog 渲染），这里只感知状态来隐藏请求参数区
-  const editingId = useSettingsDialog((state) => state.editingProviderId)
-  const mainBaseUrl = settings.apiOrigin.trim() || getApiOrigin()
-  const mainApiKey = settings.apiKey ?? ''
-
-  const protocolOptions: SelectOption<ChatProtocol>[] = [
-    { value: 'deepseek', label: t('chatProtocolDeepSeek') },
-    { value: 'openai', label: t('chatProtocolOpenAI') },
-    { value: 'responses', label: t('chatProtocolResponses') },
-    { value: 'local', label: t('chatProtocolLocal') },
-  ]
 
   return (
     <>
@@ -386,154 +318,65 @@ export const ModelSettings = () => {
         <ProviderList onEdit={openProviderEditor} />
       </div>
 
-      {/* 编辑子页打开时隐藏其余请求参数：视线集中在正在编辑的供应商上 */}
-      {!editingId ? (
-        <>
-          <div className={styles.cell}>
-            <div className={styles.field}>
-              <div className={styles.fieldHeader}>
-                <span className={styles.description}>{t('importSnippetToggle')}</span>
-                <button
-                  type="button"
-                  className={styles.linkAction}
+      {/*
+        v2.9.2：本页只留「与具体供应商无关」的公共项。
+        「接口类型 / API 地址 / 模型 / 思考程度 / 模型上下文窗口 / 图片识别能力 /
+        流式输出档位 / 上下文自动压缩」8 项全部移出本页：
+        - 前 4 项 + 上下文窗口 + 识图 → 供应商编辑页（跟着供应商/模型走，换供应商不会串）
+        - 流式输出档位 → 功能仍在（streamThrottle 生效于 useThrottleMarkdownRender），本版暂不设入口
+        - 上下文自动压缩 → 只保留「对话设置」里那一份，避免两处开关打架
+      */}
+      <div className={styles.cell}>
+        <div className={styles.field}>
+          <div className={styles.fieldHeader}>
+            <span className={styles.description}>{t('importSnippetToggle')}</span>
+            <button
+              type="button"
+              className={styles.linkAction}
+              onClick={() => {
+                setSnippetOpen((prev) => !prev)
+                setSnippetStatus(null)
+              }}
+            >
+              {snippetOpen ? t('cancel') : t('importSnippetToggle')}
+            </button>
+          </div>
+          {snippetOpen ? (
+            <>
+              <textarea
+                className={styles.textareaInput}
+                placeholder={t('importSnippetPlaceholder')}
+                spellCheck={false}
+                value={snippetText}
+                onChange={(event) => setSnippetText(event.target.value)}
+              />
+              <div className={styles.errorRow}>
+                {snippetStatus ? (
+                  <span className={snippetStatus.error ? styles.error : styles.fetchHint}>
+                    {snippetStatus.text}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <Button
+                  size="s"
+                  disabled={!snippetText.trim()}
                   onClick={() => {
-                    setSnippetOpen((prev) => !prev)
-                    setSnippetStatus(null)
+                    if (applyConfigSnippet(snippetText)) {
+                      setSnippetStatus({ text: t('importSnippetSuccess') })
+                      setSnippetText('')
+                    } else {
+                      setSnippetStatus({ text: t('importSnippetEmpty'), error: true })
+                    }
                   }}
                 >
-                  {snippetOpen ? t('cancel') : t('importSnippetToggle')}
-                </button>
+                  {t('importSnippetApply')}
+                </Button>
               </div>
-              {snippetOpen ? (
-                <>
-                  <textarea
-                    className={styles.textareaInput}
-                    placeholder={t('importSnippetPlaceholder')}
-                    spellCheck={false}
-                    value={snippetText}
-                    onChange={(event) => setSnippetText(event.target.value)}
-                  />
-                  <div className={styles.errorRow}>
-                    {snippetStatus ? (
-                      <span className={snippetStatus.error ? styles.error : styles.fetchHint}>
-                        {snippetStatus.text}
-                      </span>
-                    ) : (
-                      <span />
-                    )}
-                    <Button
-                      size="s"
-                      disabled={!snippetText.trim()}
-                      onClick={() => {
-                        if (applyConfigSnippet(snippetText)) {
-                          setSnippetStatus({ text: t('importSnippetSuccess') })
-                          setSnippetText('')
-                        } else {
-                          setSnippetStatus({ text: t('importSnippetEmpty'), error: true })
-                        }
-                      }}
-                    >
-                      {t('importSnippetApply')}
-                    </Button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          <div className={styles.cell}>
-            <div className={styles.field}>
-              <div className={styles.label}>{t('chatProtocolLabel')}</div>
-              <div className={styles.description}>{t('chatProtocolDesc')}</div>
-              <Select
-                value={settings.chatProtocol}
-                options={protocolOptions}
-                ariaLabel={t('chatProtocolLabel')}
-                onChange={(protocol) => {
-                  setChatProtocol(protocol)
-                  if (protocol === 'local' && !settings.apiOrigin.trim()) {
-                    setApiOrigin('http://127.0.0.1:11434/v1')
-                    if (settings.model === DEFAULT_MODEL) {
-                      setModel('')
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          <div className={styles.cell}>
-            <div className={styles.field}>
-              <div className={styles.fieldHeader}>
-                <div className={styles.label}>{t('modelSettingsApiOriginLabel')}</div>
-                {settings.apiOrigin ? (
-                  <button
-                    type="button"
-                    className={styles.linkAction}
-                    onClick={() => setApiOrigin('')}
-                  >
-                    {t('modelSettingsRestoreDefault')}
-                  </button>
-                ) : null}
-              </div>
-              <div className={styles.description}>{t('modelSettingsApiOriginDesc')}</div>
-              <input
-                type="url"
-                className={styles.textInput}
-                placeholder={
-                  settings.chatProtocol === 'local'
-                    ? 'http://127.0.0.1:11434/v1'
-                    : t('modelSettingsApiOriginPlaceholder')
-                }
-                spellCheck={false}
-                value={settings.apiOrigin}
-                onChange={(event) => setApiOrigin(event.target.value)}
-              />
-              {settings.chatProtocol === 'local' ? (
-                <div className={styles.presetRow}>
-                  <span className={styles.fetchHint}>{t('localPresetLabel')}</span>
-                  {LOCAL_PRESETS.map((preset) => (
-                    <button
-                      key={preset.url}
-                      type="button"
-                      className={styles.presetPill}
-                      onClick={() => setApiOrigin(preset.url)}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className={styles.cell}>
-            <div className={styles.field}>
-              <div className={styles.fieldHeader}>
-                <div className={styles.label}>{t('modelSettingsModelLabel')}</div>
-                {settings.model !== DEFAULT_MODEL ? (
-                  <button
-                    type="button"
-                    className={styles.linkAction}
-                    onClick={() => setModel(DEFAULT_MODEL)}
-                  >
-                    {t('modelSettingsRestoreDefault')}
-                  </button>
-                ) : null}
-              </div>
-              <div className={styles.description}>{t('modelSettingsModelDesc')}</div>
-              <ModelFetcherInput
-                value={settings.model}
-                baseUrl={mainBaseUrl}
-                apiKey={mainApiKey}
-                customHeaders={settings.customHeaders}
-                placeholder={t('modelSettingsModelPlaceholder')}
-                onChange={setModel}
-              />
-            </div>
-          </div>
-        </>
-      ) : null}
+            </>
+          ) : null}
+        </div>
+      </div>
 
       <div className={styles.cell}>
         <div className={styles.field}>
@@ -594,94 +437,6 @@ export const ModelSettings = () => {
         </div>
       </div>
 
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.label}>{t('modelSettingsStreamThrottleLabel')}</div>
-          <div className={styles.description}>{t('modelSettingsStreamThrottleDesc')}</div>
-          <Select
-            value={settings.streamThrottle}
-            options={streamThrottleOptions(t)}
-            ariaLabel={t('modelSettingsStreamThrottleLabel')}
-            onChange={(value) => setStreamThrottle(value as StreamThrottle)}
-          />
-        </div>
-      </div>
-
-      <ToggleCell
-        label={t('modelSettingsShowTokenUsageLabel')}
-        description={t('modelSettingsShowTokenUsageDesc')}
-        checked={settings.showTokenUsage}
-        onChange={setShowTokenUsage}
-      />
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.label}>{t('modelSettingsThinkingEffortLabel')}</div>
-          <div className={styles.description}>{t('modelSettingsThinkingEffortDesc')}</div>
-          <div className={styles.description}>{t('modelSettingsThinkingEffortHint')}</div>
-          <Select
-            value={settings.thinkingEffort}
-            options={thinkingEffortOptions(t)}
-            ariaLabel={t('modelSettingsThinkingEffortLabel')}
-            onChange={(value) => setThinkingEffort(value as ThinkingEffort)}
-          />
-        </div>
-      </div>
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.label}>{t('modelSettingsContextWindowLabel')}</div>
-          <div className={styles.description}>{t('modelSettingsContextWindowDesc')}</div>
-          <div className={styles.presetRow}>
-            {CONTEXT_WINDOW_PRESETS.map((size) => (
-              <button
-                key={size}
-                type="button"
-                className={clsx(
-                  styles.presetPill,
-                  settings.contextWindow === size && styles.presetPillActive
-                )}
-                onClick={() => setContextWindow(size)}
-              >
-                {formatWindow(size)}
-              </button>
-            ))}
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <NumberParamInput
-              label=""
-              value={settings.contextWindow}
-              placeholder="128000"
-              step="1000"
-              min={4000}
-              integer
-              onChange={(next) => setContextWindow(next ?? 128000)}
-            />
-          </div>
-          <div className={styles.description}>{t('modelSettingsContextWindowCurrent', {
-            tokens: formatWindow(settings.contextWindow),
-          })}</div>
-        </div>
-      </div>
-
-      <div className={styles.cell}>
-        <div className={styles.field}>
-          <div className={styles.label}>{t('modelSettingsVisionLabel')}</div>
-          <div className={styles.description}>{t('modelSettingsVisionDesc')}</div>
-          <Select
-            value={settings.visionSupport}
-            options={visionOptions(t)}
-            ariaLabel={t('modelSettingsVisionLabel')}
-            onChange={(value) => setVisionSupport(value as VisionSupport)}
-          />
-          <div className={styles.description}>
-            {allowsVision(settings.visionSupport, settings.model, settings.chatProtocol)
-              ? t('modelSettingsVisionResolvedYes', { model: settings.model })
-              : t('modelSettingsVisionResolvedNo', { model: settings.model })}
-          </div>
-        </div>
-      </div>
-
       <div className={styles.groupTitle}>{t('modelSettingsSectionChannels')}</div>
       <div className={styles.cell}>
         <div className={styles.field}>
@@ -695,12 +450,7 @@ export const ModelSettings = () => {
 
       <div className={styles.groupTitle}>{t('modelSettingsSectionProtocol')}</div>
 
-      <ToggleCell
-        label={t('modelSettingsAutoCompactLabel')}
-        description={t('modelSettingsAutoCompactDesc')}
-        checked={settings.autoCompactContext}
-        onChange={setAutoCompactContext}
-      />
+      {/* v2.9.2：上下文自动压缩的开关与档位只在「对话设置」里保留一份，这里不再重复 */}
 
       <ToggleCell
         label={t('modelSettingsSafetyCheckLabel')}

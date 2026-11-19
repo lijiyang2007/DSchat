@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { useSettings } from '../../services/settings.js'
 import { accountToken } from '../../services/account.js'
 import { showToast } from '../base/toastState.js'
-
 /** 设置弹窗的分组：通用设置 / 模型与策略 / 长期记忆 / 数据管理 */
 export type SettingsSection =
   | 'general'
@@ -37,11 +36,16 @@ export const useSettingsDialog = create(() => ({
   editingProviderId: null as string | null,
 }))
 
-/** 进入某个供应商的编辑子页；官方内置条目不开放编辑（登录账号即自动可用） */
+/**
+ * 进入某个供应商的编辑子页。
+ *
+ * v2.9.2：官方条目也开放编辑——用户要能调官方模型的思考强度。
+ * 官方页面里只渲染「思考强度」一项，保存时也只写这一项（见 ProviderEditor 的 save），
+ * 地址/协议/请求头/模型目录始终由内置值决定，不会因为编辑而 404。
+ */
 export const openProviderEditor = (id: string) => {
   const provider = useSettings.getState().providers.find((item) => item.id === id)
-  if (provider?.builtin) {
-    showToast({ key: 'providerOfficialLockedToast' })
+  if (!provider) {
     return
   }
   useSettingsDialog.setState({ editingProviderId: id })

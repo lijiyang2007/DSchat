@@ -359,6 +359,12 @@ export const zh = {
   providerHeadersLabel: '额外请求头',
   providerHeadersHint: '每行一个 Key: Value，不需要留空。',
   providerModelCatalog: '模型目录',
+  providerModelCatalogHint: '每个模型的上下文窗口、最大输出与输入类型都在这里单独设置',
+  providerThinkingEffort: '思考强度',
+  providerThinkingEffortHint:
+    '默认关闭。开启后模型会更愿意深入推理，耗时与消耗也会增加；按供应商各自保存，切换时互不影响。',
+  providerOfficialBaseUrlHint:
+    '官方账号的地址与协议由客户端内置，登录账号即可使用；这里只能调整思考强度。',
   providerResetModels: '清空模型',
   providerNoModelYet: '还没有模型，点下面「添加模型」加一个。',
   providerAddModel: '＋ 添加模型',

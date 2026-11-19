@@ -373,6 +373,13 @@ export const en = {
   providerHeadersLabel: 'Extra headers',
   providerHeadersHint: 'One Key: Value per line. Leave empty if not needed.',
   providerModelCatalog: 'Model catalog',
+  providerModelCatalogHint:
+    'Context window, max output and input types are set per model right here',
+  providerThinkingEffort: 'Thinking effort',
+  providerThinkingEffortHint:
+    'Off by default. Turning it up makes the model reason more deeply at the cost of time and tokens. Saved per provider, so switching does not leak settings.',
+  providerOfficialBaseUrlHint:
+    'Base URL and protocol for the official account are built in — just sign in. Only the thinking effort can be changed here.',
   providerResetModels: 'Clear models',
   providerNoModelYet: 'No models yet. Use "Add model" below.',
   providerAddModel: '+ Add model',
