@@ -365,6 +365,55 @@ const minimalReleaseInfo = (version: string): ReleaseInfo => {
 }
 
 /**
+ * 兜底来源（jsDelivr / raw package.json）只给版本号，APK 地址是按约定拼出来的，
+ * 并不保证真实存在。最典型的坑：package.json 已经改到 v2.9.4 但还没发版，
+ * 前端就拼出 `DSchat-v2.9.4.apk` 的死链，用户点「立即更新」必然下载失败。
+ *
+ * 这里拿 tag 去 Releases API 精确核验：该版本必须有一条非草稿 release、
+ * 且带一个 .apk 资产，才认为可更新。核验不了（网络问题）时保守返回 false——
+ * 宁可不弹更新，也不推一个装不上的包。
+ *
+ * @returns 该版本是否有真实存在的 APK 资产
+ */
+const verifyApkExists = async (release: ReleaseInfo): Promise<boolean> => {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  try {
+    const response = await fetchWithDevProxy(
+      `${GITHUB_REPO_URL}/releases/tag/${encodeURIComponent(release.tagName)}`,
+      { headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal }
+    )
+    if (!response.ok) {
+      return false
+    }
+    const payload: unknown = await response.json()
+    if (typeof payload !== 'object' || payload === null) {
+      return false
+    }
+    const obj = payload as Record<string, unknown>
+    if (obj.draft === true) {
+      return false
+    }
+    const assets = Array.isArray(obj.assets) ? obj.assets : []
+    return assets.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).name === 'string' &&
+        ((item as Record<string, unknown>).name as string).toLowerCase().endsWith('.apk')
+    )
+  } catch {
+    return false
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+/** 兜底来源拼出的最小 ReleaseInfo：正文空且没有 apkSize，需要核验 APK 是否真实存在 */
+const isMinimalRelease = (release: ReleaseInfo): boolean =>
+  !release.body.trim() && release.apkSize === null
+
+/**
  * 从 release 列表里挑版本号最大的那条。
  * 跳过草稿和预发布；版本号比较走 versioning（两段=正式版、三段=测试版）。
  */
@@ -609,6 +658,16 @@ export const checkForUpdates = async ({ manual = false } = {}): Promise<void> =>
     .then(({ value }) => value)
     .catch(() => null)
   if (release) {
+    // 兜底来源只有版本号、APK 地址是按约定拼的。核验该版本的 Release 里确实带 APK，
+    // 否则说明 package.json 领先于发版（如已改 2.9.4 但还没发布），绝不能推死链给用户。
+    if (isMinimalRelease(release) && !(await verifyApkExists(release))) {
+      const message = `版本 v${release.version} 还没有发布安装包，暂不提示更新`
+      useUpdater.setState({ checking: false, error: message })
+      if (manual) {
+        showToast({ type: 'error', key: 'updateCheckFailedToast', params: { message } })
+      }
+      return
+    }
     await applyReleaseResult(release, manual)
     return
   }
