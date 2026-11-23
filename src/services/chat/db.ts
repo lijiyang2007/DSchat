@@ -251,7 +251,31 @@ const fingerprint = (session: Session): string =>
  * 给会话换一个新 ID；会话内的 parentId / selectedChildId 指向消息 ID，不受影响。
  * `sourceId` 记下它在导入包里的原始 ID，便于排查「这条是从哪个包来的」。
  */
-const reId = (session: Session): Session => ({ ...session, id: createId(), sourceId: session.id })
+/**
+ * 会话内消息 id 去重（保留同一 id 的最后一条）。
+ * 重复 id 是 Bug B（buildMessageVersions 不收敛 → React #301 白屏）的数据源之一：
+ * 旧备份 / 外部导入 / 早期版本的脏数据都可能带进来。写入前洗一遍，防患于未然。
+ * 保留首次出现的那条以维持 parentId / selectedChildId 的树引用顺序。
+ * 注意：这是防御性清洗，不能替代 branches.ts 里已收敛的版本计算。
+ */
+const dedupeMessageIds = (session: Session): Session => {
+  const seen = new Set<string>()
+  const messages = session.messages.filter((message) => {
+    if (seen.has(message.id)) {
+      return false
+    }
+    seen.add(message.id)
+    return true
+  })
+  // 去重后数量没变就复用原对象，避免无谓的不可变更新
+  return messages.length === session.messages.length ? session : { ...session, messages }
+}
+
+const reId = (session: Session): Session => ({
+  ...dedupeMessageIds(session),
+  id: createId(),
+  sourceId: session.id,
+})
 
 /**
  * 把暂存写入正式数据（v2.8.7 起支持两种模式）。

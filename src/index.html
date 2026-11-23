@@ -52,6 +52,33 @@
             },
           })
         }
+        if (!String.prototype.replaceAll) {
+          Object.defineProperty(String.prototype, 'replaceAll', {
+            configurable: true,
+            writable: true,
+            value: function (search, replacement) {
+              if (search instanceof RegExp) {
+                if (!search.global) {
+                  throw new TypeError('replaceAll requires a global RegExp')
+                }
+                return this.replace(search, replacement)
+              }
+              var s = String(search)
+              if (s === '') {
+                var out = ''
+                for (var k = 0; k <= this.length; k++) out += replacement + this.charAt(k)
+                return out.slice(0, -String(replacement).length)
+              }
+              return this.split(s).join(replacement)
+            },
+          })
+        }
+        // 项目里 clone 的都是纯数据对象（消息/会话），JSON 往返足够
+        if (typeof structuredClone === 'undefined') {
+          window.structuredClone = function (value) {
+            return value === undefined ? undefined : JSON.parse(JSON.stringify(value))
+          }
+        }
       })()
     </script>
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />

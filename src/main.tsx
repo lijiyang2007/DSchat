@@ -1,10 +1,15 @@
 import { createRoot } from 'react-dom/client'
+import { ErrorBoundary } from './app/ErrorBoundary.js'
+import { installGlobalErrorCapture } from './app/globalErrors.js'
 import { App } from './app/App.js'
 import { setupTheme } from './app/theme.js'
 import { completeSignIn, installCallbackHandler } from './services/account.js'
 import { ensureKatex } from './services/markdown/katex.js'
 import './app/theme.css'
 import './app/global.css'
+
+// 尽早挂上全局错误钩子：渲染期之外的异常（模块顶层、事件、Promise）也能留下堆栈
+installGlobalErrorCapture()
 
 ensureKatex()
 setupTheme()
@@ -29,5 +34,9 @@ if (here.pathname.endsWith('/oauth/callback') && here.searchParams.has('code')) 
       window.location.replace('/?oauth_error=1')
     })
 } else {
-  createRoot(document.getElementById('root') as HTMLElement).render(<App />)
+  createRoot(document.getElementById('root') as HTMLElement).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  )
 }

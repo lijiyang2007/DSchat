@@ -2,6 +2,7 @@ import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
+import { MessageBoundary } from '../../app/ErrorBoundary.js'
 import { IconEditOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
 import { matchesRefusalKeyword } from '../../services/settings.js'
@@ -76,11 +77,12 @@ export const UserMessage = memo(function UserMessage({
           )}
         >
           {message.files.map((file) => (
-            <MessageFile
-              key={file.id}
-              file={file}
-              onRetry={retryUploadId ? () => retryUpload(sessionId, retryUploadId) : null}
-            />
+            <MessageBoundary key={file.id} resetKey={`${file.id}:${file.serverId ?? ''}`}>
+              <MessageFile
+                file={file}
+                onRetry={retryUploadId ? () => retryUpload(sessionId, retryUploadId) : null}
+              />
+            </MessageBoundary>
           ))}
         </div>
       ) : null}

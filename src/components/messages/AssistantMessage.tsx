@@ -2,6 +2,7 @@ import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
+import { MessageBoundary } from '../../app/ErrorBoundary.js'
 import { IconEditOutline16, IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { canContinueReply } from '../../services/chat/reply.js'
@@ -148,15 +149,17 @@ export const AssistantMessage = memo(function AssistantMessage({
       ) : (
         <>
           {answer ? (
-            <Markdown
-              className="ds-assistant-message-main-content"
-              content={revealed}
-              loading={streaming}
-              cacheKey={message.id}
-              disableLink={false}
-              sources={view.sources}
-              revealKey={message.id}
-            />
+            <MessageBoundary resetKey={`${message.id}:${revealed.length}:${message.status}`}>
+              <Markdown
+                className="ds-assistant-message-main-content"
+                content={revealed}
+                loading={streaming}
+                cacheKey={message.id}
+                disableLink={false}
+                sources={view.sources}
+                revealKey={message.id}
+              />
+            </MessageBoundary>
           ) : null}
           {waiting ? (
             <div className={styles.waiting}>
@@ -169,13 +172,15 @@ export const AssistantMessage = memo(function AssistantMessage({
             </div>
           ) : null}
           {notice?.presentation === 'response' ? (
-            <Markdown
-              className="ds-assistant-message-main-content"
-              content={notice.text}
-              loading={false}
-              cacheKey={`${message.id}-template`}
-              disableLink={false}
-            />
+            <MessageBoundary resetKey={`${message.id}:notice:${notice.text.length}`}>
+              <Markdown
+                className="ds-assistant-message-main-content"
+                content={notice.text}
+                loading={false}
+                cacheKey={`${message.id}-template`}
+                disableLink={false}
+              />
+            </MessageBoundary>
           ) : notice ? (
             <div className={styles.notice}>
               <IconWarningOutline16 />

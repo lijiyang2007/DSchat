@@ -129,11 +129,26 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk "release-assets/DSchat-${{ steps.ver.outputs.tag }}.apk"
           rm -f android/release.keystore
 
+      - name: Resolve release notes
+        id: notes
+        shell: bash
+        run: |
+          # 发版公告从仓库根目录 RELEASE_NOTES.md 读取，用户点「立即更新」时弹窗里看到的就是它。
+          # 文件不存在时留空，让 Publish step 回退到自动生成（只有 changelog 链接）。
+          if [ -s RELEASE_NOTES.md ]; then
+            echo "body_path=RELEASE_NOTES.md" >> "$GITHUB_OUTPUT"
+            echo "使用 RELEASE_NOTES.md 作为更新公告"
+          else
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+            echo "未找到 RELEASE_NOTES.md，回退到自动 changelog"
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: DSchat ${{ steps.ver.outputs.tag }}
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.body_path }}
+          generate_release_notes: ${{ steps.notes.outputs.body_path == '' }}
           files: |
             release-assets/DSchat-${{ steps.ver.outputs.tag }}.apk

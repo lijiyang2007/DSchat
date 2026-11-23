@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getCurrentAppVersion } from '../../services/updater.js'
+import { CRASH_LOG_KEY } from '../../app/ErrorBoundary.js'
 import { useSettings } from '../../services/settings.js'
 import { IconDataOutline16, IconEditOutline16, IconLinkOutline16 } from '../base/icons.js'
 import { SettingsGroup, SettingsEntry } from './SettingsPage.js'
@@ -36,6 +37,15 @@ export const FeedbackSettings = () => {
       `Provider: ${provider?.name ?? providerId ?? 'unknown'}`,
       `Locale: ${locale}`,
     ]
+    // 有崩溃记录时一并附上（白屏/异常反馈不再没线索）；注意不泄露隐私内容
+    try {
+      const crash = localStorage.getItem(CRASH_LOG_KEY)
+      if (crash) {
+        lines.push('', '**最近一次崩溃**', '```', crash.slice(0, 2000), '```')
+      }
+    } catch {
+      // localStorage 不可用时跳过
+    }
     return encodeURIComponent(lines.join('\n'))
   }, [versionInfo, provider, providerId, locale])
 
