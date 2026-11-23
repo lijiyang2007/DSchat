@@ -98,6 +98,14 @@ check('竞速三路来源（直连/jsDelivr/raw）', /'github-direct', 'jsdelivr
 check('竞速只收合法结果', /fetchFastest<ReleaseInfo>/.test(updater))
 check('raw 探针严格校验 name', /payload\.name !== 'dschat'/.test(updater))
 
+console.log('\n六·补、兜底版本核验 APK 真实存在（防 package.json 领先发版的死链）')
+check('有 verifyApkExists 核验函数', /const verifyApkExists/.test(updater))
+check('核验按 tag 查 Releases', /releases\/tag\/\$\{encodeURIComponent\(release\.tagName\)\}/.test(updater))
+check('核验要求非草稿', /obj\.draft === true/.test(updater.slice(updater.indexOf('const verifyApkExists'))))
+check('核验要求带 .apk 资产', /\.endsWith\('\.apk'\)/.test(updater.slice(updater.indexOf('const verifyApkExists'))))
+check('有 minimal release 判定', /const isMinimalRelease/.test(updater))
+check('兜底版本先核验再应用', /isMinimalRelease\(release\)[\s\S]{0,120}verifyApkExists\(release\)/.test(updater))
+
 console.log('\n七、更新：断点续传与镜像顺序')
 check('原生支持 Range 续传', mainActivity.includes('setRequestProperty("Range"'))
 check('续传时以追加方式写', mainActivity.includes('new FileOutputStream(tempFile, resumed)'))
