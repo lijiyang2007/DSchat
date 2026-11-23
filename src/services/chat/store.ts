@@ -90,6 +90,18 @@ const serverTools = (search: boolean, readUrl: boolean): CreateMessageRequest['t
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
 
+/**
+ * 把每轮可能变动的记忆块拼成一句前导，挂在**本轮提问**前面（v2.9.4，方案 A）。
+ *
+ * 这些内容以前拼在 system 里，而 system 位于请求最前面：任何一条记忆变化
+ * 都会让整条历史前缀在服务端硬盘缓存里匹配不上（DeepSeek 是前缀逐字节匹配），
+ * 命中率直接归零。挪到提问前导后，变动只影响尾部，历史前缀照旧命中。
+ *
+ * 顺序固定（长期记忆在前、跨对话记忆在后），保证内容相同的两轮拼接结果也相同。
+ */
+const composeDynamicContext = (savedMemoryContext: string, memoryContext: string): string =>
+  [savedMemoryContext, memoryContext].filter(Boolean).join('\n\n')
+
 type ChatState = {
   ready: boolean
   initError: boolean
@@ -765,7 +777,7 @@ const submitPrompt = (
   // 先落一个本地标题：OpenAI 兼容 / 第三方中转不会下发服务端标题，没有兜底列表就全是一片「新对话」
   const localTitle = buildLocalTitle(question)
   updateSession(sessionId, (session) => {
-    const next = appendBranch(session, history.at(-1)?.id ?? null, [question, reply])
+    const next = appendBranch(session, history[history.length - 1]?.id ?? null, [question, reply])
     return {
       ...next,
       updatedAt: now,
@@ -973,8 +985,8 @@ export const continueReply = (sessionId: string, messageId: string) => {
     return
   }
   const path = getVisibleMessages(session)
-  const question = path.at(-2)
-  const previous = path.at(-1)
+  const question = path[path.length - 2]
+  const previous = path[path.length - 1]
   const { thinking, search, model, allowRefusedContext } = useSettings.getState()
   if (
     question?.role !== 'user' ||
@@ -1706,9 +1718,40 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reply = settleReply(reply, 'stopped', Date.now(), undefined, settings.keepRefusedContent)
           break
         }
-        const system = [baseSystem, compactionContext, savedMemoryContext, memoryContext]
-          .filter(Boolean)
-          .join('\n\n')
+        /**
+         * v2.9.4（方案 A）：**动态内容不进 system**。
+         *
+         * DeepSeek 的上下文硬盘缓存是**前缀逐字节匹配**：system 在最前面，
+         * 只要它变一个字符，整条历史的前缀就全部作废，本轮命中直接归零。
+         * 长期记忆（随时可能新增）与跨对话记忆（每轮按提问召回）都属此类，
+         * 以前拼在 system 里，等于每轮主动放弃缓存。
+         *
+         * 现在它们改拼在**本轮提问前面**：变动只发生在尾部，
+         * 前面的历史前缀照旧命中。压缩摘要留在 system——它跟会话走、
+         * 变化频率远低于前两者，且作为硬约束放在 system 里更可靠。
+         */
+        const system = [baseSystem, compactionContext].filter(Boolean).join('\n\n')
+        const dynamicContext = composeDynamicContext(savedMemoryContext, memoryContext)
+        // 拼在本轮提问的可变前缀上；附件块会排到前面，不影响记忆内容的完整性
+        const questionWithContext: UserMessage = dynamicContext
+          ? {
+              ...inlinePrepared.question,
+              content: `${dynamicContext}\n\n${inlinePrepared.question.content}`,
+            }
+          : inlinePrepared.question
+        // 动态内容变了，需要按新的提问重新组装一次 messages（再跑一次纯函数，开销可忽略）
+        const messagesWithContext = dynamicContext
+          ? toRequestMessages(
+              prepared.history,
+              questionWithContext,
+              prepared.prefix,
+              initial.thinking ?? false,
+              latestReminder,
+              settings.allowRefusedContext,
+              settings.chatProtocol !== 'deepseek',
+              getSession(sessionId)?.compaction?.throughMessageId
+            )
+          : messages
         const tools = serverTools(initial.search ?? false, settings.readUrl)
         // 思考程度：off 也要发协议字段——第三方网关认 enable_thinking:false /
         // reasoning.effort:none，不发就按各自默认继续思考（2.7.4 修复）；
@@ -1735,7 +1778,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const requestBody: CreateMessageRequest = {
           model: requestModel,
           ...(system ? { system } : {}),
-          messages,
+          messages: messagesWithContext,
           thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },
           ...buildReasoningPayload(effort, settings.chatProtocol),
           ...(settings.safetyCheck ? { safety_check: SAFETY_CHECK } : {}),
@@ -1776,8 +1819,14 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                 )
               : streamMessage(settings.apiKey ?? '', requestBody, controller.signal)
         const blockIndexes = new Map<number, number>()
+        /* v2.9.4：生成计时从第一个内容块开始，到本轮收尾结束（见 types.ts 的 timing） */
+        const generateStartedAt = Date.now()
+        let firstBlockAt = 0
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
+          if (event.type === 'content_block_start' && firstBlockAt === 0) {
+            firstBlockAt = Date.now()
+          }
           if (
             event.type === 'message_delta' &&
             (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
@@ -1794,7 +1843,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reply = applyEvent(reply, event, Date.now(), blockIndexes)
           scheduleFlush()
         }
+        const firstContentAt = firstBlockAt || generateStartedAt
         reply = settleReply(reply, 'done', Date.now(), undefined, settings.keepRefusedContent)
+        // 只在真的收到过内容块时记，否则区间里夹着等待/失败，算出来的速度没意义
+        if (firstBlockAt) {
+          reply = { ...reply, timing: { startedAt: firstContentAt, endedAt: Date.now() } }
+        }
 
         if (
           settings.autoExtractMemory &&

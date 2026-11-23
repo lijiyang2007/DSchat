@@ -37,7 +37,7 @@ export const Modal = ({
     const token = {}
     openModals.push(token)
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && openModals.at(-1) === token) {
+      if (event.key === 'Escape' && openModals[openModals.length - 1] === token) {
         onCloseRef.current()
       }
     }

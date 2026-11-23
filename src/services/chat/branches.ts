@@ -63,14 +63,17 @@ export const buildMessageVersions = (
     const key = session.rootMessageId === undefined ? message.id : message.parentId
     const ids = groups.get(key)
     if (ids) {
-      ids.push(message.id)
+      // 修复 Bug B：同一 parent 下重复 id 只保留一次，避免把两个
+      // {ids,index} 对象都写进 versions，让收敛判据更容易成立。
+      if (!ids.includes(message.id)) {
+        ids.push(message.id)
+      }
     } else {
       groups.set(key, [message.id])
     }
   }
 
   const versions = new Map<string, MessageVersions>()
-  let unchanged = previous.size === session.messages.length
   for (const ids of groups.values()) {
     const cachedIds = previous.get(ids[0])?.ids
     const stableIds =
@@ -82,10 +85,20 @@ export const buildMessageVersions = (
       const version =
         cached?.ids === stableIds && cached.index === index ? cached : { ids: stableIds, index }
       versions.set(id, version)
-      if (version !== cached) {
-        unchanged = false
-      }
     })
+  }
+  // 修复 Bug B：收敛判据改为「与上一份内容等价」，不再假设
+  // previous.size === session.messages.length（重复 id 时该前提恒不成立，
+  // 导致每次渲染都返回新 Map、渲染期 setState 不收敛 → React #301 白屏）。
+  // 放在构建完成之后遍历 versions 逐项比较；只要有一项是新对象或数量不同就不收敛。
+  let unchanged = previous.size === versions.size
+  if (unchanged) {
+    for (const [id, version] of versions) {
+      if (previous.get(id) !== version) {
+        unchanged = false
+        break
+      }
+    }
   }
   return unchanged ? previous : versions
 }

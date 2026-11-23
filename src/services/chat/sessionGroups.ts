@@ -26,7 +26,7 @@ export const groupSessions = (sessions: SessionSummary[], now: number, t = trans
               ? 'sessionHistoryTimelineLabel30days'
               : null
     const groupKey = key ?? monthKey(time) ?? ''
-    const last = groups.at(-1)
+    const last = groups[groups.length - 1]
     if (last?.key === groupKey) {
       last.sessions.push(session)
     } else {

@@ -265,7 +265,7 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
     flushPreamble()
     const { kind, input } = block
     const status = getStatus(result, streaming)
-    const last = steps.at(-1)
+    const last = steps[steps.length - 1]
 
     if (input.action === 'search') {
       const { queries } = input
@@ -383,7 +383,7 @@ export const getAreaTitle = (
   if (!streaming) {
     return translate('messageThinkStopped')
   }
-  const last = view.steps.at(-1)
+  const last = view.steps[view.steps.length - 1]
   if (last?.type === 'search' && last.status === 'wip') {
     return translate(isImageSearchKind(last.kind) ? 'imageSearching' : 'deepSearchSearching')
   }

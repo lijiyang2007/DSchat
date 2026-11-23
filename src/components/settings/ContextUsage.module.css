@@ -71,6 +71,58 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 缓存命中（v2.9.3）：一行百分比 + 命中量/总输入量 */
+.cacheRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  margin-top: 2px;
+}
+
+.cacheLabel {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary));
+}
+
+.cacheValue {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cacheGood {
+  color: var(--dsw-alias-state-success-primary, #12a150);
+}
+
+.cacheMid {
+  color: var(--dsw-alias-state-warning-primary, #e8a317);
+}
+
+.cacheLow {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.cacheDetail {
+  margin-left: auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 输出速度（v2.9.4）：token/s，用品牌色，和缓存命中区分开 */
+.speedValue {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-brand-primary);
+}
+
 /* 主动压缩（v2.8.8）：立即压缩 / 清除摘要 */
 .actions {
   display: flex;

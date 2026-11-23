@@ -3,9 +3,11 @@ import { useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { getVisibleMessages } from '../../services/chat/branches.js'
 import {
+  cacheHitDetail,
   compactLevelMeta,
   contextUsageDetail,
   manualCompactionStats,
+  outputSpeedDetail,
 } from '../../services/chat/compaction.js'
 import {
   clearSessionCompaction,
@@ -86,6 +88,22 @@ export const ContextUsage = ({
           : 'low'
     return { percent, level, tokens: detail.tokens, estimated: detail.estimated }
   }, [session, model, contextWindow, levelMeta.ratio])
+
+  // 缓存命中（v2.9.3）：只读本轮回复的 usage，命中量 / 总输入量
+  const cacheHit = useMemo(() => {
+    if (!session) {
+      return null
+    }
+    return cacheHitDetail(getVisibleMessages(session))
+  }, [session])
+
+  // 输出速度（v2.9.4）：本轮生成 token / 生成耗时，只读带 timing 的回复
+  const speed = useMemo(() => {
+    if (!session) {
+      return null
+    }
+    return outputSpeedDetail(getVisibleMessages(session))
+  }, [session])
 
   // 可压缩轮次：保留轮数跟随当前档位（省档留得少、长记忆档留得多）
   // 同样改成 useMemo：它会遍历全部轮次，压缩后如果每次重渲染都算一遍同样很重。
@@ -180,6 +198,43 @@ export const ContextUsage = ({
             : t('settingsContextUsageEmpty')}
         </div>
       )}
+      {cacheHit ? (
+        <div className={styles.cacheRow}>
+          <span className={styles.cacheLabel}>{t('settingsCacheHitLabel')}</span>
+          <span
+            className={clsx(
+              styles.cacheValue,
+              cacheHit.ratio >= 0.5
+                ? styles.cacheGood
+                : cacheHit.ratio >= 0.2
+                  ? styles.cacheMid
+                  : styles.cacheLow
+            )}
+          >
+            {Math.round(cacheHit.ratio * 100)}%
+          </span>
+          <span className={styles.cacheDetail}>
+            {t('settingsCacheHitDetail', {
+              hit: formatTokens(cacheHit.hit),
+              total: formatTokens(cacheHit.total),
+            })}
+          </span>
+        </div>
+      ) : null}
+      {cacheHit ? <div className={styles.hint}>{t('settingsCacheHitHint')}</div> : null}
+      {speed ? (
+        <div className={styles.cacheRow}>
+          <span className={styles.cacheLabel}>{t('settingsOutputSpeedLabel')}</span>
+          <span className={styles.speedValue}>{speed.perSecond}</span>
+          <span className={styles.cacheDetail}>
+            {t('settingsOutputSpeedDetail', {
+              tokens: speed.tokens,
+              seconds: speed.seconds.toFixed(1),
+            })}
+          </span>
+        </div>
+      ) : null}
+      {speed ? <div className={styles.hint}>{t('settingsOutputSpeedHint')}</div> : null}
       {actions ? (
         <div className={styles.actions}>
           <button

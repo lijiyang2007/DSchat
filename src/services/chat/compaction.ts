@@ -257,7 +257,7 @@ export const planCompaction = ({
   if (covered.length < 2) {
     return null
   }
-  const lastCovered = covered.at(-1)?.[1]
+  const lastCovered = covered[covered.length - 1]?.[1]
   if (!lastCovered) {
     return null
   }
@@ -299,7 +299,7 @@ export const planManualCompaction = ({
   const splitAt = pending.length - keep
   const covered = pending.slice(0, splitAt)
   const kept = pending.slice(splitAt)
-  const lastCovered = covered.at(-1)?.[1]
+  const lastCovered = covered[covered.length - 1]?.[1]
   if (!lastCovered) {
     return null
   }
@@ -415,6 +415,78 @@ export const actualContextTokens = (history: Message[]): number | null => {
       (output_tokens ?? 0)
     if (total > 0) {
       return total
+    }
+  }
+  return null
+}
+
+/**
+ * 缓存命中情况（v2.9.3）。
+ *
+ * DeepSeek 的上下文硬盘缓存默认开启，命中的部分从硬盘拉回而不重新计算。
+ * 服务端在每条回复的 usage 里给出两个字段：
+ * - `cache_read_input_tokens`：本次输入中命中缓存的部分
+ * - `input_tokens` + `cache_creation_input_tokens`：未命中的部分
+ *   总输入 = 三者之和（官方文档「总输入 Token 数为 input_tokens +
+ *   cache_read_input_tokens + cache_creation_input_tokens」）。
+ *
+ * 这里只读「本轮」（最后一条带 usage 的助手回复），跟上下文用量面板的口径一致：
+ * 拿整条会话累加没有意义，命中率要一轮一轮看。
+ *
+ * @returns { hit, total, ratio } —— hit 命中量、total 总输入量、ratio 0~1；
+ *          没有任何 usage 记录时返回 null
+ */
+export const cacheHitDetail = (
+  history: Message[]
+): { hit: number; total: number; ratio: number } | null => {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i]
+    if (message.role !== 'assistant' || !message.usage) {
+      continue
+    }
+    const hit = message.usage.cache_read_input_tokens ?? 0
+    const total =
+      (message.usage.input_tokens ?? 0) +
+      (message.usage.cache_creation_input_tokens ?? 0) +
+      hit
+    // 全 0 说明这条回复没有可用用量（本地拒答、失败等），继续往前找
+    if (total > 0) {
+      return { hit, total, ratio: hit / total }
+    }
+  }
+  return null
+}
+
+/**
+ * 输出速度（v2.9.4）：本轮生成了多少 token / 用了多少秒。
+ *
+ * 取「最后一条**带 timing** 的助手回复」：计时区间从收到第一个内容块开始，
+ * 到回复结束（message_stop / 用户停止 / 出错收尾）为止——不含上传附件、
+ * 等首字和压缩上下文的时间，所以是**真正的生成速度**，不是端到端耗时。
+ *
+ * token 用服务端返回的 `output_tokens`（含思考 token，思考也算生成）。
+ * 没有 timing（v2.9.4 之前的历史回复）或没有 usage 时返回 null。
+ *
+ * @returns { tokens, seconds, perSecond } —— perSecond 保留一位小数
+ */
+export const outputSpeedDetail = (
+  history: Message[]
+): { tokens: number; seconds: number; perSecond: number } | null => {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i]
+    if (message.role !== 'assistant' || !message.timing || !message.usage) {
+      continue
+    }
+    const { startedAt, endedAt } = message.timing
+    const tokens = message.usage.output_tokens ?? 0
+    // 少于 200ms 的区间测不准（单块回复），跳过继续往前找
+    const seconds = Math.max(0, endedAt - startedAt) / 1000
+    if (tokens > 0 && seconds >= 0.2) {
+      return {
+        tokens,
+        seconds,
+        perSecond: Math.round((tokens / seconds) * 10) / 10,
+      }
     }
   }
   return null

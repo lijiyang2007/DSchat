@@ -140,7 +140,7 @@ const StepItem = ({
 }) => {
   switch (step.type) {
     case 'thinking': {
-      const lastBlock = step.blocks.at(-1)
+      const lastBlock = step.blocks[step.blocks.length - 1]
       const thinking =
         streaming && lastBlock?.startedAt !== undefined && lastBlock.endedAt === undefined
       return (

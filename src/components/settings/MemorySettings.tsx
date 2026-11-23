@@ -196,6 +196,13 @@ export const MemorySettings = () => {
           </div>
         </div>
       ) : null}
+
+      {/* v2.9.4：跨对话记忆每轮按提问重新召回，内容天然会变——它会稳定拉低缓存命中 */}
+      {settings.crossChatMemory ? (
+        <div className={styles.cell}>
+          <div className={styles.description}>{t('memoryCrossChatCacheHint')}</div>
+        </div>
+      ) : null}
     </>
   )
 }

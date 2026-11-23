@@ -546,7 +546,14 @@ export const useSettings = create<Settings>(() => ({
   allowRefusedContext: readBool(KEYS.allowRefusedContext, false),
   allowEditAssistant: readBool(KEYS.allowEditAssistant, true),
   savedMemoryEnabled: readBool(KEYS.savedMemoryEnabled, true),
-  autoExtractMemory: readBool(KEYS.autoExtractMemory, true),
+  /**
+   * v2.9.4（方案 D）：默认改为**关闭**。
+   *
+   * 它每轮结束都会再发一次请求去提炼记忆——既多花一次调用，
+   * 又会悄悄改动长期记忆、进而扰动每轮请求的前缀（缓存命中杀手）。
+   * 显式开过的用户保持原值；从没碰过这个开关的一律按新默认「关」。
+   */
+  autoExtractMemory: readBool(KEYS.autoExtractMemory, false),
   crossChatMemory: readBool(KEYS.crossChatMemory, false),
   crossChatMemoryLimit: Math.min(10, Math.max(1, readNumber(KEYS.crossChatMemoryLimit) ?? 4)),
   refusalEnabled: readBool(KEYS.refusalEnabled, false),

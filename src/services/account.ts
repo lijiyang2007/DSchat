@@ -233,7 +233,7 @@ export const completeSignIn = async (url: string): Promise<AccountUser> => {
     code_verifier: attempt.verifier,
     redirect_uri: attempt.redirectUri,
     device_id: deviceId(),
-    device_model: `${navigator.platform || 'Android'} ${navigator.userAgent.split(' ').at(-1) ?? ''}`.trim(),
+    device_model: `${navigator.platform || 'Android'} ${(() => { const parts = navigator.userAgent.split(' '); return parts[parts.length - 1] ?? '' })()}`.trim(),
     os_version: navigator.userAgent,
   })
   const user: AccountUser = {

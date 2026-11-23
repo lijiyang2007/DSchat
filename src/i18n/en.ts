@@ -42,6 +42,16 @@ export const en = {
   settingsContextUsageEmpty: 'This chat is empty',
   settingsContextUsageTokens: '{used} / {total} tokens',
   settingsContextUsageEstimated: 'No server usage yet — this is estimated from text length',
+  settingsCacheHitLabel: 'Cache hit',
+  settingsCacheHitDetail: '{hit} of {total} tokens',
+  settingsCacheHitHint:
+    'Share of this turn input served from the server-side prefix cache (higher is cheaper)',
+  settingsOutputSpeedLabel: 'Output speed',
+  settingsOutputSpeedDetail: '{tokens} tokens · {seconds}s',
+  settingsOutputSpeedHint:
+    'Generation phase only (first token to end of reply), excluding queueing and attachment uploads',
+  memoryCrossChatCacheHint:
+    'Note: cross-chat memory is recalled per question, so it changes every turn and will steadily lower the prefix cache hit rate.',
   settingsCompactLevelTitle: 'Compaction threshold',
   settingsCompactLevelFrugal: 'Frugal',
   settingsCompactLevelEconomy: 'Economy',

@@ -255,7 +255,7 @@ const toAssistantParam = (
       if (text) {
         text.text += block.text
       } else {
-        const previous = content.at(-1)
+        const previous = content[content.length - 1]
         text = {
           type: 'text',
           text: `${previous?.type === 'text' ? '\n\n' : ''}${block.text}`,

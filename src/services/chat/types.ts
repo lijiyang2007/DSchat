@@ -92,6 +92,11 @@ export type AssistantMessage = MessageBranch & {
   stopDetails?: StopDetails
   /** 最近一次请求的用量，续写后更新 */
   usage?: MessageUsage
+  /**
+   * 本轮生成的起止时间（v2.9.4）：从收到**第一个内容块**到回复结束。
+   * 用于算输出速度；续写会覆盖成最后一次的区间。没有收到任何内容块时缺省。
+   */
+  timing?: { startedAt: number; endedAt: number }
   error?: {
     /** upload：发送前补传附件失败，请求没有发出 */
     kind: ApiErrorKind | 'upload'

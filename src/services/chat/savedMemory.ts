@@ -127,11 +127,24 @@ export const clearSavedMemories = () => {
   commit([])
 }
 
-/** 格式化已启用的长期记忆条目，注入请求 system */
+/**
+ * 格式化已启用的长期记忆条目，注入本轮提问的前导段（v2.9.4：不再放 system）。
+ *
+ * v2.9.4（方案 B）：按 `updatedAt` **升序**输出，新记忆追加在**末尾**。
+ *
+ * 以前按列表顺序输出，而 `addSavedMemory` 是 `[created, ...current]` 插到最前面，
+ * 于是新增一条记忆 = 把整块内容的**头部**改写一遍，前缀匹配全灭。
+ * 现在改成追加：老条目位置不动，变化只发生在块尾，前面那部分仍有命中机会。
+ *
+ * 注意：只改**注入顺序**，不改存储顺序——设置页里「最新在上」的展示保持不变。
+ */
 export const formatSavedMemories = (): string => {
   const enabled = useSavedMemories
     .getState()
     .items.filter((item) => item.enabled && item.content.trim())
+    .slice()
+    // 稳定排序：updatedAt 相同则按 id，保证同样的记忆集合永远拼出同样的字符串
+    .sort((a, b) => a.updatedAt - b.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   if (enabled.length === 0) {
     return ''
   }

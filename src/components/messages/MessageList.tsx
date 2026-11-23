@@ -21,7 +21,7 @@ import type { Message } from '../../services/chat/types.js'
  * 点击后按失败的回答重新补传附件并请求。
  */
 const getUploadRetryId = (messages: Message[], streaming: boolean) => {
-  const last = messages.at(-1)
+  const last = messages[messages.length - 1]
   return !streaming &&
     last?.role === 'assistant' &&
     last.status === 'error' &&
@@ -61,17 +61,16 @@ export const MessageList = ({
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
   const [showBackToBottom, setShowBackToBottom] = useState(false)
   const messages = getVisibleMessages(session)
-  const [previousVersions, setPreviousVersions] = useState(() =>
-    buildMessageVersions(session, new Map())
-  )
-  const versions = useMemo(
-    () => buildMessageVersions(session, previousVersions),
-    [session, previousVersions]
-  )
-  if (versions !== previousVersions) {
-    setPreviousVersions(versions)
-  }
-  const lastMessageId = messages.at(-1)?.id
+  // 修复 Bug B：去掉渲染期 setState（versions !== previousVersions 时 setPreviousVersions），
+  // 它是 React #301「Too many re-renders」的触发点：重复 id 会让它永不收敛。
+  // 改用 useRef 在 useMemo 内维护缓存，既保留版本对象复用、又不在渲染期改 state。
+  const versionsRef = useRef<ReadonlyMap<string, MessageVersions>>(new Map())
+  const versions = useMemo(() => {
+    const next = buildMessageVersions(session, versionsRef.current)
+    versionsRef.current = next
+    return next
+  }, [session])
+  const lastMessageId = messages[messages.length - 1]?.id
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
     if (el && stickyRef.current) {

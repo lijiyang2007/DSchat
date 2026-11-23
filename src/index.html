@@ -5,6 +5,55 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#ffffff" />
     <base href="/" />
+    <!-- 老 WebView 兼容兜底（Chrome < 92 / Android 5.x~8.x）：
+         必须内联在 <head>，早于任何模块脚本执行，连模块顶层的 .at() 也能保护。 -->
+    <script>
+      (function () {
+        function defineAt(proto) {
+          if (proto.at) return
+          Object.defineProperty(proto, 'at', {
+            configurable: true,
+            writable: true,
+            value: function (index) {
+              var n = Number(index) || 0
+              var len = this.length
+              var i = n < 0 ? len + n : n
+              return i < 0 || i >= len ? undefined : this[i]
+            },
+          })
+        }
+        defineAt(Array.prototype)
+        defineAt(String.prototype)
+        if (!Object.hasOwn) {
+          Object.defineProperty(Object, 'hasOwn', {
+            configurable: true,
+            value: function (obj, key) {
+              return Object.prototype.hasOwnProperty.call(obj, key)
+            },
+          })
+        }
+        if (!Array.prototype.flatMap) {
+          Object.defineProperty(Array.prototype, 'flatMap', {
+            configurable: true,
+            writable: true,
+            value: function (fn, thisArg) {
+              var out = []
+              for (var i = 0; i < this.length; i++) {
+                if (i in this) {
+                  var mapped = fn.call(thisArg, this[i], i, this)
+                  if (Array.isArray(mapped)) {
+                    for (var j = 0; j < mapped.length; j++) out.push(mapped[j])
+                  } else {
+                    out.push(mapped)
+                  }
+                }
+              }
+              return out
+            },
+          })
+        }
+      })()
+    </script>
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <title>DSchat</title>

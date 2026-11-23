@@ -53,7 +53,7 @@ export const SettingsPage = ({
     const token = {}
     openPages.push(token)
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || openPages.at(-1) !== token) {
+      if (event.key !== 'Escape' || openPages[openPages.length - 1] !== token) {
         return
       }
       if (onBack) {
